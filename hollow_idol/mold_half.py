@@ -17,6 +17,7 @@ OUTER_X, OUTER_Y, OUTER_Z = 100, 80, 40
 WALL = 5
 CHAMFER_L = 3
 HEMI_R = 6
+HEMI_HEIGHT = 3.0       # dome height above floor (< HEMI_R); try HEMI_R/3 ≈ 2 or HEMI_R/2 = 3
 HEMI_OFFSET = 15        # distance from interior corner to hemisphere centre
 NOTCH_L, NOTCH_W, NOTCH_H = 10, 5, 5
 
@@ -77,14 +78,22 @@ with BuildPart() as mold:
     hemi_x = inner_cx - HEMI_OFFSET   # 30
     hemi_y = inner_cy - HEMI_OFFSET   # 20
 
+    # Sphere centre is sunk below the floor so only HEMI_HEIGHT mm protrudes.
+    # centre_z = inner_floor_z - (HEMI_R - HEMI_HEIGHT)
+    hemi_cz = inner_floor_z - (HEMI_R - HEMI_HEIGHT)
+
     with Locations(
-        (hemi_x,  hemi_y,  inner_floor_z),
-        (hemi_x,  -hemi_y, inner_floor_z),
-        (-hemi_x, hemi_y,  inner_floor_z),
-        (-hemi_x, -hemi_y, inner_floor_z),
+        (hemi_x,  hemi_y,  hemi_cz),
+        (hemi_x,  -hemi_y, hemi_cz),
+        (-hemi_x, hemi_y,  hemi_cz),
+        (-hemi_x, -hemi_y, hemi_cz),
     ):
-        # arc_size1=0 → upper hemisphere only (equator to north pole)
-        Sphere(HEMI_R, arc_size1=0, arc_size2=90)
+        Sphere(HEMI_R)
+
+    # Clip any sphere material below the exterior base (z=0).
+    clip_depth = HEMI_R  # sphere can reach as low as hemi_cz - HEMI_R
+    with Locations((0, 0, -clip_depth / 2)):
+        Box(OUTER_X + 2, OUTER_Y + 2, clip_depth, mode=Mode.SUBTRACT)
 
     # 5. Rectangular notch on one long side (−Y interior wall) for half ID.
     #    Laid against both the interior floor and that wall:
@@ -98,6 +107,6 @@ with BuildPart() as mold:
 
 # ── Export ─────────────────────────────────────────────────────────────────────
 os.makedirs("output", exist_ok=True)
-out_path = "output/mold_half.stl"
+out_path = "output/mold_half_a.stl"
 export_stl(mold.part, out_path)
 print(f"Exported: {out_path}")
