@@ -6,3 +6,10 @@ BAMBU_P1S   = PrinterConfig("Bambu P1S",    bed_x=256, bed_y=256, bed_z=256)
 BAMBU_X1C   = PrinterConfig("Bambu X1C",    bed_x=256, bed_y=256, bed_z=256)
 
 DEFAULT = GENERIC_200
+
+BY_NAME: dict[str, PrinterConfig] = {
+    "generic-200": GENERIC_200,
+    "prusa-mk4":   PRUSA_MK4,
+    "bambu-p1s":   BAMBU_P1S,
+    "bambu-x1c":   BAMBU_X1C,
+}
