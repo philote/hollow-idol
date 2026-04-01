@@ -1,9 +1,5 @@
-# CLAUDE.md - Parametric Mold Case Generator
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Purpose
-**hollow-idol** Parametric mold case generator for ceramic slip casting. Cases are printed in 3D filament or resin, filled with plaster to create slip casting molds for ceramic production (primarily tiki mugs and decorative forms).
-
+# CLAUDE.md - hollow-idol - Parametric Mold Case Generator
+Parametric mold case generator for ceramic slip casting. Generates build123d Python scripts that produce 3D-printable mold cases for tiki mugs and decorative ceramic forms.
 
 ## Workflow Context
 1. AI tool (Tripo/Meshy) generates initial mesh from reference image
@@ -16,33 +12,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack
 - Python 3.11+
-- CadQuery 2.x
+- build123d
 - Output: STL and STEP
 - Editor: VS Code
 
+## CRITICAL — Development Approach
+Build and verify geometry incrementally. Do not generate full architecture until each geometric primitive is confirmed working. The failure mode is generating plausible-looking code that produces incorrect geometry.
+
+Order of operations:
+1. Single mold half with correct parting face features — verify by user in PrusaSlicer
+2. Matching second half with concave registration keys
+3. Parametric config wrapping proven geometry
+4. Full project structure, CLI, export pipeline
+5. STL model import and boolean mode
+
+Never refactor working geometry while adding new features without explicit permission from the user. If a solid exports cleanly and dimensions are correct, that code is frozen.
+
 ## Ceramic/Mold Domain Rules
-- Masters scaled up by shrink_factor to account for clay shrinkage
+- (optional) Masters scaled up by shrink_factor to account for clay shrinkage
 - Default shrinkage: 13% (shrink_factor = 1.13) — parameterize per clay body
 - Plaster walls minimum 25mm, ideally 30-40mm
-- Draft angles minimum 3° on all interior walls — use CadQuery native draft
-- Registration natches on every parting face
-- Slip well at top for pouring liquid clay (default 40mm diameter)
-- Flange lip around parting edges for rubber band / clamp during casting
-- 3-part molds needed for forms with undercuts (e.g. tiki faces, handles)
+- Registration keys on every parting face:
+  - Convex hemispheres on one half
+  - Matching concave divots on the other
+  - Positioned on what will be the plaster the parting face (interior floor of the print model), not exterior walls
+- Rectangular notch on one long side only for mold half identification
 
-## CadQuery Conventions
-- All units in mm
-- Parameters isolated in MoldConfig + PrinterConfig dataclasses in config.py
-- Each mold half is a separate CadQuery solid
-- Full assembled solid for preview
-- Flat-lay arrangement for print-ready export
-- Graceful error handling around STL boolean operations
+### Feature Definitions
+
+- **Parting plane**: The flat plane where both plaster faces meet when assembled. 
+- **Interior floor face**: The inner bottom surface of the tray cavity.
+- **Keys**
+  - **Convex key**: Hemisphere bump on the INTERIOR FLOOR FACE protruding INTO the cavity. Creates a concave impression in the plaster's parting surface.
+  - **Concave key**: Hemispherical recess CUT INTO the INTERIOR FLOOR FACE. When plaster sets, fills with plaster creating a convex bump on the plaster's parting surface.
+- **Chamfer**: 45° cut on the 4 outer vertical corners.
+
+## Printer Configuration
+- No hardcoded printer assumptions
+- PrinterConfig dataclass: printer_name, bed_x, bed_y, bed_z
+- Default build volume: 200 x 200 x 200mm
 - Warn if any mold half exceeds configured build volume
+- Common presets in printers.py
 
 ## Two Operating Modes
-1. **Model mode** — imports watertight STL, scales by shrink_factor,
-   booleans model out of mold cavity
-2. **Blank mode** — no STL, sized by manual width/height/depth inputs
+1. **Blank mode** — no STL, sized by manual width/height/depth inputs
+2. **Model mode** — imports watertight STL, (optionally) scales by shrink_factor, booleans model out of mold cavity. This needs a lot more thought since 1/2 of the model should be on one printed mold and the other 1/2 in the other.
 
 ## Project Structure
 hollow-idol/
@@ -51,7 +65,7 @@ hollow-idol/
 ├── pyproject.toml
 ├── hollow_idol/
 │   ├── __init__.py
-│   ├── config.py        # MoldConfig + PrinterConfig dataclasses + defaults
+│   ├── config.py        # MoldConfig + PrinterConfig dataclasses
 │   ├── printers.py      # common printer presets
 │   ├── mold_case.py     # main generator
 │   ├── natches.py       # registration key geometry
@@ -62,42 +76,7 @@ hollow-idol/
 ├── output/              # exported mold half STLs
 └── tests/
 
-## Mold Case Terminology
-
-**BEFORE WRITING ANY GEOMETRY CODE:** Read `docs/example_target_mold.png` with the Read tool.
-It shows exactly where features go. Do not reason about coordinates without looking at it first.
-
-Reference images:
-- `docs/example_target_mold.png` — labeled Tinkercad mockup showing correct geometry
-- `docs/bug_original_floating_natches.png` — example of the wrong output (floating natches bug)
-
-### Coordinate System
-
-```
-Front half (design coords):
-  X — width   (cavity spans ±blank_width/2)
-  Y — depth   (floor at -(blank_depth/2 + case_wall), open face at Y=0)
-  Z — height  (cavity spans ±blank_height/2)
-
-Back half = front half mirrored over XZ plane (Y → -Y):
-  floor at +(blank_depth/2 + case_wall), open face at Y=0
-```
-
-### Feature Definitions
-
-- **Parting plane**: Y=0. The flat plane where both open faces meet when assembled. NO features live here.
-- **Interior floor face**: The inner bottom surface of the tray cavity.
-  - Front half: Y = -blank_depth/2 (e.g. -50mm for blank_depth=100)
-  - Back half: Y = +blank_depth/2 (e.g. +50mm, after mirroring)
-- **Convex key**: Hemisphere bump on the INTERIOR FLOOR FACE protruding INTO the cavity (+Y direction). Front half only. When plaster sets, creates a concave impression in the plaster's parting surface.
-- **Concave key**: Hemispherical recess CUT INTO the floor solid material (+Y direction into Y > floor_y). Back half only. When plaster sets, fills with plaster creating a convex bump on the back plaster's parting surface.
-- **Key constraint (CRITICAL)**: `natch_radius ≤ case_wall / 2` — otherwise the concave key punches through the floor. Defaults: natch_radius=4, case_wall=8 (4 ≤ 4 ✓).
-- **Key positions**: Within cavity footprint, inset from walls by `natch_radius + 2mm`. NOT on the outer wall rim or flange.
-- **Orientation notch**: Small rectangular tab on ONE exterior side wall only (-Z wall). Same position on both halves — makes the assembled shape asymmetric so you can't assemble backwards.
-- **Chamfer**: 45° cut on the 4 outer vertical edges (corners parallel to Y). Applied via `.edges("|Y").chamfer(size)`.
-- **Flange area**: Wall cross-section ring visible at Y=0. Keys do NOT go here — they go on the interior floor.
-
-## Key Parameters
+## Key Parameters (implement after geometry is verified)
 
 ### PrinterConfig
 printer_name, bed_x, bed_y, bed_z
