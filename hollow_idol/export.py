@@ -1,12 +1,16 @@
 """STL / STEP export and flat-lay print arrangement.
 
-Flat-lay arranges all mold halves so each part sits with its largest flat face
-on the build plate (Z=0), then spaces them apart along X for easy slicing.
+Flat-lay arranges all mold halves so each part sits with its floor on the
+build plate (Z=0) and its open parting face pointing up, then spaces them
+apart along X for easy slicing.
+
+For Y-axis parting (default): each tray has its floor in the -Y direction and
+its open face at Y=0.  Rotating 90° around the X-axis brings the floor to
+Z=0 and the open face to the top — the correct print orientation.
 """
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import cadquery as cq
 
@@ -25,14 +29,21 @@ def export_step(solid: cq.Workplane, path: str) -> None:
     cq.exporters.export(solid, path)
 
 
-def flat_lay_arrange(halves: list[cq.Workplane]) -> list[cq.Workplane]:
-    """Orient each mold half flat on the build plate and space along X.
+def flat_lay_arrange(
+    halves: list[cq.Workplane],
+    split_axis: str = "Y",
+) -> list[cq.Workplane]:
+    """Orient each mold tray half for printing and space along X.
 
-    - Translates each half so its lowest Z sits at Z=0 (print bed level).
-    - For the bottom mold half (which extends into negative Z) this naturally
-      flips the orientation so the parting face prints face-down — which is the
-      desired orientation (flat face down, open cavity up).
-    - Spaces parts along X with a 10 mm gap between bounding boxes.
+    For Y-axis parting (default):
+        Each tray has its floor in the -Y direction and open face at Y=0.
+        Rotating 90° around X brings the floor to Z=0 and open face up —
+        the correct print orientation (open cavity up, no supports needed).
+
+    For Z-axis parting (legacy):
+        Translates each half so its lowest Z sits at Z=0.
+
+    Spaces parts along X with a 10 mm gap between bounding boxes.
 
     Returns a new list of Workplanes; does not modify the originals.
     """
@@ -41,15 +52,20 @@ def flat_lay_arrange(halves: list[cq.Workplane]) -> list[cq.Workplane]:
     gap = 10.0
 
     for half in halves:
-        bb = half.val().BoundingBox()
-        # Lift so the lowest Z is at Z=0
-        lifted = half.translate((0.0, 0.0, -bb.zmin))
+        if split_axis == "Y":
+            # Rotate 90° around X-axis: Y→Z, Z→-Y
+            # This brings the tray floor (was at -Y) down to -Z, then we lift to Z=0
+            rotated = half.rotate((0, 0, 0), (1, 0, 0), -90)
+            bb = rotated.val().BoundingBox()
+            oriented = rotated.translate((0.0, 0.0, -bb.zmin))
+        else:
+            bb = half.val().BoundingBox()
+            oriented = half.translate((0.0, 0.0, -bb.zmin))
 
-        # Centre each part's bounding box along X starting from cursor_x
-        bb2 = lifted.val().BoundingBox()
+        bb2 = oriented.val().BoundingBox()
         part_width = bb2.xmax - bb2.xmin
-        x_offset = cursor_x - bb2.xmin  # shift so xmin → cursor_x
-        placed = lifted.translate((x_offset, 0.0, 0.0))
+        x_offset = cursor_x - bb2.xmin
+        placed = oriented.translate((x_offset, 0.0, 0.0))
         arranged.append(placed)
 
         cursor_x += part_width + gap
@@ -85,7 +101,8 @@ def export_mold(
     base = os.path.join(output_dir, base_name)
 
     # Flat-lay individual halves for printing
-    laid = flat_lay_arrange(halves)
+    split_axis = summary.get("split_axis", "Y")
+    laid = flat_lay_arrange(halves, split_axis=split_axis)
     for i, half in enumerate(laid):
         path = f"{base}_half_{i}.stl"
         export_stl(half, path)

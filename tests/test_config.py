@@ -33,8 +33,9 @@ class TestMoldConfig:
         m = MoldConfig()
         assert m.model_file is None
         assert m.shrink_factor == 1.13
-        assert m.wall_thickness == 30.0
-        assert m.split_axis == "Z"
+        assert m.case_wall == 4.0
+        assert m.plaster_wall_min == 30.0
+        assert m.split_axis == "Y"
         assert m.split_positions == [0.0]
         assert m.num_parts == 2
         assert m.natch_radius == 6.0
@@ -44,11 +45,14 @@ class TestMoldConfig:
         assert m.slip_well_height == 20.0
         assert m.draft_angle_deg == 3.0
         assert m.bounding_box_padding == 10.0
-        assert m.flange_width == 10.0
-        assert m.flange_thickness == 5.0
+        assert m.clip_width == 15.0
+        assert m.clip_height == 10.0
+        assert m.clip_depth == 6.0
         assert m.blank_width == 100.0
         assert m.blank_depth == 100.0
         assert m.blank_height == 120.0
+        assert m.chamfer_size == 3.0
+        assert m.orientation_notch_size == 8.0
 
     def test_custom_values(self):
         m = MoldConfig(blank_width=80, blank_depth=60, shrink_factor=1.10)

@@ -32,21 +32,22 @@ def split_mold(
     Returns:
         List of mold half Workplanes, bottom to top.
     """
-    if cfg.split_axis != "Z":
+    if cfg.split_axis not in ("Y", "Z"):
         raise NotImplementedError(
-            f"split_axis={cfg.split_axis!r} is not yet supported; only 'Z' is implemented."
+            f"split_axis={cfg.split_axis!r} is not yet supported; 'Y' and 'Z' are implemented."
         )
 
     positions = sorted(cfg.split_positions)
-
-    # Build Z boundaries: -∞, pos0, pos1, ..., +∞
     boundaries = [-_BIG] + positions + [_BIG]
 
     halves: list[cq.Workplane] = []
     for i in range(len(boundaries) - 1):
-        z_lo = boundaries[i]
-        z_hi = boundaries[i + 1]
-        cutter = _z_slab(z_lo, z_hi)
+        lo = boundaries[i]
+        hi = boundaries[i + 1]
+        if cfg.split_axis == "Z":
+            cutter = _z_slab(lo, hi)
+        else:  # "Y"
+            cutter = _y_slab(lo, hi)
         half = assembled.intersect(cutter)
         halves.append(half)
 
@@ -61,4 +62,15 @@ def _z_slab(z_lo: float, z_hi: float) -> cq.Workplane:
         cq.Workplane("XY")
         .box(_BIG, _BIG, height, centered=True)
         .translate((0.0, 0.0, centre_z))
+    )
+
+
+def _y_slab(y_lo: float, y_hi: float) -> cq.Workplane:
+    """Axis-aligned box spanning [y_lo, y_hi] in Y, unlimited in X/Z."""
+    depth = y_hi - y_lo
+    centre_y = (y_lo + y_hi) / 2.0
+    return (
+        cq.Workplane("XZ")
+        .box(_BIG, _BIG, depth, centered=True)
+        .translate((0.0, centre_y, 0.0))
     )

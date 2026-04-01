@@ -5,21 +5,18 @@ Entry points:
     build_model_mold(cfg, printer) -> dict  [not yet implemented]
 
 The returned dict has keys:
-    halves    – list of cq.Workplane, one per mold part (bottom → top)
-    assembled – cq.Workplane of the full joined block (for preview)
+    halves    – list of cq.Workplane, one per mold part (front → back)
+    assembled – cq.Workplane of the full joined case (for preview)
     summary   – dict of human-readable metadata and any warnings
 """
 from __future__ import annotations
 
-import math
 import warnings as _warnings
 
 import cadquery as cq
 
 from hollow_idol.config import MoldConfig, PrinterConfig
 from hollow_idol.natches import apply_natches
-from hollow_idol.slip_well import add_slip_well
-from hollow_idol.split import split_mold
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -29,65 +26,58 @@ def build_blank_mold(
     cfg: MoldConfig,
     printer: PrinterConfig,
 ) -> dict:
-    """Generate a two-part blank mold (no imported mesh).
+    """Generate a two-part blank mold case (no imported mesh).
+
+    Each half is a thin-walled open tray.  The two halves are placed
+    face-to-face along the Y-axis parting plane (Y=0).  Plaster is poured
+    into the open face of each tray around the master form; once set the
+    printed case is removed leaving a plaster mold half.
 
     Pipeline:
-        1. Outer shell box
-        2. Lofted inner cavity with draft angles
-        3. Hollow the shell
-        4. Flange around parting edge
-        5. Split into halves
-        6. Add natches (bumps on bottom, divots on top)
-        7. Add slip well to top half
-        8. Validate against printer build volume
+        1. Build base tray (floor at -Y, open at Y=0)
+        2. Add exterior clamping clips
+        3. Apply registration bumps to front half
+        4. Mirror base tray to get back half (floor at +Y, open at Y=0)
+        5. Apply registration divots to back half
+        6. Assemble preview solid
+        7. Validate against printer build volume
 
     Returns a dict with keys: halves, assembled, summary.
     """
     bw = cfg.blank_width
     bd = cfg.blank_depth
     bh = cfg.blank_height
-    wt = cfg.wall_thickness
+    cw = cfg.case_wall
 
-    outer_w = bw + 2.0 * wt
-    outer_d = bd + 2.0 * wt
-    outer_h = bh + 2.0 * wt
+    half_depth = bd / 2.0
 
-    # 1. Outer shell
-    outer = cq.Workplane("XY").box(outer_w, outer_d, outer_h, centered=True)
+    # 1+2. Base tray with clips and orientation notch (no natches yet)
+    base_tray = _build_tray_half(cfg)
+    base_with_clips = _add_clips(base_tray, cfg)
+    base_with_notch = _add_orientation_notch(base_with_clips, cfg)
 
-    # 2. Inner cavity — lofted to apply draft angles
-    inner_void = _lofted_cavity(cfg)
+    # Interior floor Y positions (design coords, before flat-lay rotation).
+    # Front half: interior at -Y, floor face at -blank_depth/2.
+    # Back half:  mirror of front → interior at +Y, floor face at +blank_depth/2.
+    floor_y_front = -bd / 2.0
+    floor_y_back  = +bd / 2.0
 
-    # 3. Hollow: subtract cavity from shell
-    mold_block = outer.cut(inner_void)
+    # 3. Front half — convex key domes on interior floor, pointing +Y into cavity.
+    front = apply_natches(base_with_notch, cfg, mode="bump", floor_y=floor_y_front)
 
-    # 4. Flange ring at parting plane
-    flange = _make_flange(outer_w, outer_d, cfg.flange_width, cfg.flange_thickness)
-    assembled = mold_block.union(flange)
+    # 4. Back half — mirror base about XZ plane (negates Y).
+    back_base = base_with_notch.mirror("XZ")
 
-    # 5. Split
-    halves = split_mold(assembled, cfg)
-    if len(halves) != cfg.num_parts:
-        _warnings.warn(
-            f"Expected {cfg.num_parts} halves but produced {len(halves)}.",
-            stacklevel=2,
-        )
+    # 5. Back half — concave key recesses cut into floor solid (+Y into material).
+    #    Requires natch_radius ≤ case_wall/2 to avoid punching through the floor.
+    back = apply_natches(back_base, cfg, mode="divot", floor_y=floor_y_back)
 
-    # halves[0] = bottom (Z ≤ 0), halves[-1] = top (Z ≥ 0)
-    bot_half = halves[0]
-    top_half = halves[-1]
+    halves = [front, back]
 
-    # 6. Natches
-    bot_half = apply_natches(bot_half, cfg, mode="bump")
-    top_half = apply_natches(top_half, cfg, mode="divot")
+    # 6. Assembled preview
+    assembled = front.union(back)
 
-    # 7. Slip well in top half
-    top_z = outer_h / 2.0
-    top_half = add_slip_well(top_half, cfg, top_z=top_z)
-
-    halves = [bot_half] + halves[1:-1] + [top_half]
-
-    # 8. Build volume warnings
+    # 7. Build volume warnings
     build_warnings: list[str] = []
     for i, half in enumerate(halves):
         label = f"half_{i}"
@@ -97,18 +87,21 @@ def build_blank_mold(
         for w in build_warnings:
             _warnings.warn(w, stacklevel=2)
 
+    outer_w = bw + 2.0 * cw
+    outer_d = half_depth + cw
+    outer_h = bh + 2.0 * cw
+
     summary = {
         "mode": "blank",
         "printer": printer.printer_name,
         "blank_dims_mm": (bw, bd, bh),
-        "outer_dims_mm": (outer_w, outer_d, outer_h),
+        "tray_outer_dims_mm": (outer_w, outer_d, outer_h),
+        "case_wall_mm": cw,
+        "split_axis": cfg.split_axis,
         "num_parts": len(halves),
         "shrink_factor": cfg.shrink_factor,
         "draft_angle_deg": cfg.draft_angle_deg,
-        "wall_thickness_mm": wt,
-        "flange_width_mm": cfg.flange_width,
         "natch_radius_mm": cfg.natch_radius,
-        "slip_well_diameter_mm": cfg.slip_well_diameter,
         "warnings": build_warnings,
     }
 
@@ -139,63 +132,127 @@ def build_model_mold(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _lofted_cavity(cfg: MoldConfig) -> cq.Workplane:
-    """Lofted inner void with draft angle taper.
+def _build_tray_half(cfg: MoldConfig) -> cq.Workplane:
+    """Build one open tray half with floor at -Y and open face at Y=0.
 
-    The cavity is widest at the parting plane (Z=0) and narrows toward the
-    closed ends, giving the required draft for easy demolding.
+    Coordinate system:
+        X — width  (interior spans ±blank_width/2)
+        Y — depth  (floor outer face at -(blank_depth/2 + case_wall), open at Y=0)
+        Z — height (interior spans ±blank_height/2)
 
-    Returns a single solid spanning Z ∈ [-blank_height/2, +blank_height/2].
+    The inner void is a simple positioned box subtracted from the outer box,
+    leaving case_wall thickness on the floor and all four side walls, with a
+    fully open parting face at Y=0.
     """
-    w0 = cfg.blank_width
-    d0 = cfg.blank_depth
-    half_h = cfg.blank_height / 2.0
+    bw = cfg.blank_width
+    bd_half = cfg.blank_depth / 2.0
+    bh = cfg.blank_height
+    cw = cfg.case_wall
 
-    taper = half_h * math.tan(math.radians(cfg.draft_angle_deg))
-    w1 = max(w0 - 2.0 * taper, 1.0)
-    d1 = max(d0 - 2.0 * taper, 1.0)
+    outer_w = bw + 2.0 * cw
+    outer_d = bd_half + cw   # floor (cw thick) + interior depth (bd_half)
+    outer_h = bh + 2.0 * cw
 
-    # Small overlap past Z=0 so the two lofts union cleanly without gap
-    eps = 0.01
-
-    inner_bottom = (
-        cq.Workplane("XY")          # Z = 0
-        .rect(w0, d0)
-        .workplane(offset=-(half_h + eps))
-        .rect(w1, d1)
-        .loft()
-    )
-    inner_top = (
-        cq.Workplane("XY")          # Z = 0
-        .rect(w0, d0)
-        .workplane(offset=(half_h + eps))
-        .rect(w1, d1)
-        .loft()
+    # Outer box: centred so it spans Y ∈ [-(bd_half+cw), 0]
+    cy_outer = -(bd_half + cw) / 2.0
+    outer = (
+        cq.Workplane("XY")
+        .box(outer_w, outer_d, outer_h, centered=True)
+        .translate((0.0, cy_outer, 0.0))
     )
 
-    return inner_bottom.union(inner_top)
+    # Inner void: spans Y ∈ [-bd_half, +eps]
+    # Removes the interior leaving case_wall on floor and side walls.
+    # The +eps past Y=0 ensures the parting face is fully open.
+    eps = 0.5
+    inner_d = bd_half + eps
+    cy_inner = (-bd_half + eps) / 2.0
+    inner = (
+        cq.Workplane("XY")
+        .box(bw, inner_d, bh, centered=True)
+        .translate((0.0, cy_inner, 0.0))
+    )
+
+    tray = outer.cut(inner)
+
+    # Chamfer the 4 outer vertical edges (parallel to Y, at X×Z corners).
+    # Select edges by length: vertical edges span the full outer depth (outer_d),
+    # so we filter for edges parallel to Y (tangent direction ≈ Y-axis).
+    if cfg.chamfer_size > 0:
+        try:
+            tray = (
+                tray
+                .edges("|Y")
+                .chamfer(cfg.chamfer_size)
+            )
+        except Exception:
+            # CadQuery chamfer can fail on complex topologies; skip gracefully.
+            pass
+
+    return tray
 
 
-def _make_flange(
-    outer_w: float,
-    outer_d: float,
-    flange_width: float,
-    flange_thickness: float,
-) -> cq.Workplane:
-    """Rectangular ring flange centred at Z=0.
+def _add_clips(tray: cq.Workplane, cfg: MoldConfig) -> cq.Workplane:
+    """Add a symmetric pair of rectangular clamping clips to the ±X outer walls.
 
-    The flange extends outward from the mold body walls by flange_width,
-    and spans Z ∈ [-flange_thickness/2, +flange_thickness/2].
+    Each clip is a tab that protrudes outward in X.  When both case halves are
+    brought face-to-face the clips overlap and hold the assembly closed (or
+    accept a rubber band / zip tie around them).
+
+    Clips are centred at Z=0 and at Y mid-depth of the tray.
     """
-    fo_w = outer_w + 2.0 * flange_width
-    fo_d = outer_d + 2.0 * flange_width
+    bw = cfg.blank_width
+    bd_half = cfg.blank_depth / 2.0
+    cw = cfg.case_wall
 
-    flange_box = cq.Workplane("XY").box(fo_w, fo_d, flange_thickness, centered=True)
-    # Punch out the mold body footprint (with a tiny clearance to avoid coincident faces)
-    punch = cq.Workplane("XY").box(
-        outer_w - 0.01, outer_d - 0.01, flange_thickness + 1.0, centered=True
+    clip_w = cfg.clip_width    # Y extent (along tray depth)
+    clip_h = cfg.clip_height   # Z extent
+    clip_d = cfg.clip_depth    # X protrusion beyond outer wall
+
+    outer_w = bw + 2.0 * cw
+    clip_centre_y = -(bd_half + cw) / 2.0   # Y mid-depth of tray
+
+    for sign in (+1.0, -1.0):
+        x_wall = sign * outer_w / 2.0
+        x_centre = x_wall + sign * clip_d / 2.0
+
+        clip = (
+            cq.Workplane("XY")
+            .box(clip_d, clip_w, clip_h, centered=True)
+            .translate((x_centre, clip_centre_y, 0.0))
+        )
+        tray = tray.union(clip)
+
+    return tray
+
+
+def _add_orientation_notch(tray: cq.Workplane, cfg: MoldConfig) -> cq.Workplane:
+    """Add a small asymmetric rectangular tab to the -Z exterior wall.
+
+    The tab appears on the SAME side of both mold halves (both front and back),
+    making the assembled case obviously asymmetric — you can tell by sight or
+    touch that the halves can only go together one way.  It is NOT a male/female
+    connection pair; it is purely an orientation cue.
+
+    The tab protrudes outward in -Z from the bottom exterior wall, centred in X,
+    at the Y mid-depth of the tray.
+    """
+    bw = cfg.blank_width
+    bd_half = cfg.blank_depth / 2.0
+    cw = cfg.case_wall
+    ns = cfg.orientation_notch_size   # width and protrusion depth
+
+    outer_h = cfg.blank_height + 2.0 * cw
+    z_wall_outer = -(outer_h / 2.0)          # outer face of -Z wall
+    z_notch_centre = z_wall_outer - ns / 2.0  # notch centred on that face
+    y_mid = -(bd_half + cw) / 2.0             # Y mid-depth of tray
+
+    notch = (
+        cq.Workplane("XY")
+        .box(ns, ns, ns, centered=True)
+        .translate((0.0, y_mid, z_notch_centre))
     )
-    return flange_box.cut(punch)
+    return tray.union(notch)
 
 
 def _check_build_volume(
@@ -227,22 +284,22 @@ def _check_build_volume(
 
 def _print_summary(s: dict) -> None:
     bw, bd, bh = s["blank_dims_mm"]
-    ow, od, oh = s["outer_dims_mm"]
+    ow, od, oh = s["tray_outer_dims_mm"]
     print(
         f"\n=== hollow-idol mold summary ===\n"
-        f"  Mode           : {s['mode']}\n"
-        f"  Printer        : {s['printer']}\n"
-        f"  Cavity (W×D×H) : {bw:.0f} × {bd:.0f} × {bh:.0f} mm\n"
-        f"  Outer  (W×D×H) : {ow:.0f} × {od:.0f} × {oh:.0f} mm\n"
-        f"  Wall thickness : {s['wall_thickness_mm']:.0f} mm\n"
-        f"  Draft angle    : {s['draft_angle_deg']}°\n"
-        f"  Shrink factor  : {s['shrink_factor']}\n"
-        f"  Parts          : {s['num_parts']}\n"
+        f"  Mode                : {s['mode']}\n"
+        f"  Printer             : {s['printer']}\n"
+        f"  Cavity (W×D×H)      : {bw:.0f} × {bd:.0f} × {bh:.0f} mm\n"
+        f"  Tray outer (W×D×H)  : {ow:.0f} × {od:.0f} × {oh:.0f} mm\n"
+        f"  Case wall thickness : {s['case_wall_mm']:.0f} mm\n"
+        f"  Draft angle         : {s['draft_angle_deg']}°\n"
+        f"  Shrink factor       : {s['shrink_factor']}\n"
+        f"  Parts               : {s['num_parts']}\n"
     )
     if s["warnings"]:
-        print("  ⚠ Warnings:")
+        print("  Warnings:")
         for w in s["warnings"]:
             print(f"      {w}")
     else:
-        print("  ✓ All halves fit within build volume.")
+        print("  All halves fit within build volume.")
     print()

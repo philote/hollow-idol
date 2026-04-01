@@ -62,6 +62,41 @@ hollow-idol/
 ├── output/              # exported mold half STLs
 └── tests/
 
+## Mold Case Terminology
+
+**BEFORE WRITING ANY GEOMETRY CODE:** Read `docs/example_target_mold.png` with the Read tool.
+It shows exactly where features go. Do not reason about coordinates without looking at it first.
+
+Reference images:
+- `docs/example_target_mold.png` — labeled Tinkercad mockup showing correct geometry
+- `docs/bug_original_floating_natches.png` — example of the wrong output (floating natches bug)
+
+### Coordinate System
+
+```
+Front half (design coords):
+  X — width   (cavity spans ±blank_width/2)
+  Y — depth   (floor at -(blank_depth/2 + case_wall), open face at Y=0)
+  Z — height  (cavity spans ±blank_height/2)
+
+Back half = front half mirrored over XZ plane (Y → -Y):
+  floor at +(blank_depth/2 + case_wall), open face at Y=0
+```
+
+### Feature Definitions
+
+- **Parting plane**: Y=0. The flat plane where both open faces meet when assembled. NO features live here.
+- **Interior floor face**: The inner bottom surface of the tray cavity.
+  - Front half: Y = -blank_depth/2 (e.g. -50mm for blank_depth=100)
+  - Back half: Y = +blank_depth/2 (e.g. +50mm, after mirroring)
+- **Convex key**: Hemisphere bump on the INTERIOR FLOOR FACE protruding INTO the cavity (+Y direction). Front half only. When plaster sets, creates a concave impression in the plaster's parting surface.
+- **Concave key**: Hemispherical recess CUT INTO the floor solid material (+Y direction into Y > floor_y). Back half only. When plaster sets, fills with plaster creating a convex bump on the back plaster's parting surface.
+- **Key constraint (CRITICAL)**: `natch_radius ≤ case_wall / 2` — otherwise the concave key punches through the floor. Defaults: natch_radius=4, case_wall=8 (4 ≤ 4 ✓).
+- **Key positions**: Within cavity footprint, inset from walls by `natch_radius + 2mm`. NOT on the outer wall rim or flange.
+- **Orientation notch**: Small rectangular tab on ONE exterior side wall only (-Z wall). Same position on both halves — makes the assembled shape asymmetric so you can't assemble backwards.
+- **Chamfer**: 45° cut on the 4 outer vertical edges (corners parallel to Y). Applied via `.edges("|Y").chamfer(size)`.
+- **Flange area**: Wall cross-section ring visible at Y=0. Keys do NOT go here — they go on the interior floor.
+
 ## Key Parameters
 
 ### PrinterConfig
