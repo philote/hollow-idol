@@ -1,112 +1,21 @@
-"""
-Step 1 geometry — single mold half tray.
-
-Spec:
-- Outer box: 100 × 80 × 40 mm
-- 5 mm walls, open top
-- 3 mm chamfer on all interior edges (vertical corners + floor-wall junctions)
-- 4× 6 mm-radius hemisphere bumps on interior floor, centred 15 mm from each corner
-- 1× 10 × 5 × 5 mm rectangular notch on one long interior wall at floor level
-"""
-
-from build123d import *
+"""Half A — convex keys + ID notch. Run directly to regenerate output/mold_half_a.stl."""
 import os
+from build123d import export_stl
+from hollow_idol.config import MoldConfig
+from hollow_idol.mold_case import build_half_a
+from hollow_idol import printers
 
-# ── Parameters ────────────────────────────────────────────────────────────────
-OUTER_X, OUTER_Y, OUTER_Z = 100, 80, 40
-WALL = 5
-CHAMFER_L = 3
-HEMI_R = 6
-HEMI_HEIGHT = 3.0       # dome height above floor (< HEMI_R); try HEMI_R/3 ≈ 2 or HEMI_R/2 = 3
-HEMI_OFFSET = 15        # distance from interior corner to hemisphere centre
-NOTCH_L, NOTCH_W, NOTCH_H = 10, 5, 5
+cfg     = MoldConfig()
+printer = printers.DEFAULT
 
-# ── Derived values ─────────────────────────────────────────────────────────────
-inner_x = OUTER_X - 2 * WALL   # 90
-inner_y = OUTER_Y - 2 * WALL   # 70
-inner_z = OUTER_Z - WALL       # 35  (no ceiling — open top)
-inner_cx = inner_x / 2         # 45  (half inner width in X)
-inner_cy = inner_y / 2         # 35  (half inner depth in Y)
-inner_floor_z = WALL           # 5   (Z level of interior floor)
-mid_z = inner_floor_z + inner_z / 2   # 22.5 — midpoint of inner vertical edges
+part = build_half_a(cfg)
 
-# ── Build ──────────────────────────────────────────────────────────────────────
-with BuildPart() as mold:
+bb = part.bounding_box()
+sx, sy, sz = bb.max.X - bb.min.X, bb.max.Y - bb.min.Y, bb.max.Z - bb.min.Z
+for dim, size, bed in [("X", sx, printer.bed_x), ("Y", sy, printer.bed_y), ("Z", sz, printer.bed_z)]:
+    if size > bed:
+        print(f"WARNING: Half A {dim} {size:.1f} mm exceeds {printer.printer_name} bed ({bed} mm)")
 
-    # 1. Outer box sitting on the XY plane
-    Box(OUTER_X, OUTER_Y, OUTER_Z,
-        align=(Align.CENTER, Align.CENTER, Align.MIN))
-
-    # 2. Subtract interior volume → 5 mm floor + walls, open top
-    with Locations((0, 0, inner_floor_z)):
-        Box(inner_x, inner_y, inner_z,
-            align=(Align.CENTER, Align.CENTER, Align.MIN),
-            mode=Mode.SUBTRACT)
-
-    # 3. Chamfer interior edges 3 mm
-    #
-    #    Vertical interior corner edges:
-    #      run from z=inner_floor_z to z=OUTER_Z
-    #      centre ≈ (±inner_cx, ±inner_cy, mid_z)
-    #
-    #    Interior floor-wall edges:
-    #      at z=inner_floor_z, along the inner wall planes
-
-    vert_interior = [
-        e for e in mold.edges()
-        if (abs(abs(e.center().X) - inner_cx) < 0.5 and
-            abs(abs(e.center().Y) - inner_cy) < 0.5 and
-            abs(e.center().Z - mid_z) < 0.5)
-    ]
-
-    floor_wall = [
-        e for e in mold.edges()
-        if (abs(e.center().Z - inner_floor_z) < 0.5 and
-            (abs(abs(e.center().X) - inner_cx) < 0.5 or
-             abs(abs(e.center().Y) - inner_cy) < 0.5))
-    ]
-
-    interior_edges = vert_interior + floor_wall
-    assert len(interior_edges) == 8, (
-        f"Expected 8 interior edges for chamfer, found {len(interior_edges)}. "
-        "Check inner_cx/inner_cy/mid_z tolerances."
-    )
-    chamfer(interior_edges, length=CHAMFER_L)
-
-    # 4. Hemisphere bumps on interior floor (convex registration keys)
-    #    Flat face flush with floor, dome protruding up into cavity.
-    hemi_x = inner_cx - HEMI_OFFSET   # 30
-    hemi_y = inner_cy - HEMI_OFFSET   # 20
-
-    # Sphere centre is sunk below the floor so only HEMI_HEIGHT mm protrudes.
-    # centre_z = inner_floor_z - (HEMI_R - HEMI_HEIGHT)
-    hemi_cz = inner_floor_z - (HEMI_R - HEMI_HEIGHT)
-
-    with Locations(
-        (hemi_x,  hemi_y,  hemi_cz),
-        (hemi_x,  -hemi_y, hemi_cz),
-        (-hemi_x, hemi_y,  hemi_cz),
-        (-hemi_x, -hemi_y, hemi_cz),
-    ):
-        Sphere(HEMI_R)
-
-    # Clip any sphere material below the exterior base (z=0).
-    clip_depth = HEMI_R  # sphere can reach as low as hemi_cz - HEMI_R
-    with Locations((0, 0, -clip_depth / 2)):
-        Box(OUTER_X + 2, OUTER_Y + 2, clip_depth, mode=Mode.SUBTRACT)
-
-    # 5. Rectangular notch on one long side (−Y interior wall) for half ID.
-    #    Laid against both the interior floor and that wall:
-    #      10 mm long (X), 5 mm wide into cavity (+Y), 5 mm tall (+Z).
-    notch_cy = -(inner_cy - NOTCH_W / 2)    # −32.5  (centred in the 5 mm notch width)
-    notch_cz = inner_floor_z + NOTCH_H / 2  #   7.5  (sits on floor)
-
-    with Locations((0, notch_cy, notch_cz)):
-        Box(NOTCH_L, NOTCH_W, NOTCH_H, mode=Mode.SUBTRACT)
-
-
-# ── Export ─────────────────────────────────────────────────────────────────────
 os.makedirs("output", exist_ok=True)
-out_path = "output/mold_half_a.stl"
-export_stl(mold.part, out_path)
-print(f"Exported: {out_path}")
+export_stl(part, "output/mold_half_a.stl")
+print("Exported: output/mold_half_a.stl")
