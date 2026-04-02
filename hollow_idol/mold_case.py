@@ -77,42 +77,43 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         # faces the groove opening.
         z_bot_rail = c.groove_depth + c.groove_width
         z_top_rail = z_bot_rail + c.groove_depth
+        z_mid_rail = z_bot_rail + c.groove_depth / 2  # apex of symmetric wedge
+        rail_reach = c.groove_depth / 2               # horizontal extent to apex
 
-        # Back wall rail — triangle in Y-Z plane, extruded along X (centred at X=0)
+        # Back wall rail — symmetric wedge in Y-Z plane, extruded along X
         with BuildSketch(Plane.YZ) as sk_back_rail:
             with BuildLine():
                 Polyline(
-                    (back_inner_y,                  z_bot_rail),
-                    (back_inner_y,                  z_top_rail),
-                    (back_inner_y + c.groove_depth, z_top_rail),
+                    (back_inner_y,                z_bot_rail),
+                    (back_inner_y,                z_top_rail),
+                    (back_inner_y + rail_reach,   z_mid_rail),
                     close=True,
                 )
             make_face()
         extrude(sk_back_rail.sketch, amount=inner_x / 2, both=True)
 
-        # Arm rails — triangle in X-Z plane, extruded along -Y into each arm.
-        # Custom plane with normal pointing -Y so extrude travels from Y=0 back.
+        # Arm rails — symmetric wedge in X-Z plane, extruded along -Y into each arm.
         arm_plane = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, -1, 0))
 
-        # Left arm: inner face at left_inner_x, hypotenuse slopes toward +X (centre)
+        # Left arm: inner face at left_inner_x, apex toward +X (centre)
         with BuildSketch(arm_plane) as sk_left_rail:
             with BuildLine():
                 Polyline(
-                    (left_inner_x,                  z_bot_rail),
-                    (left_inner_x,                  z_top_rail),
-                    (left_inner_x + c.groove_depth, z_top_rail),
+                    (left_inner_x,               z_bot_rail),
+                    (left_inner_x,               z_top_rail),
+                    (left_inner_x + rail_reach,  z_mid_rail),
                     close=True,
                 )
             make_face()
         extrude(sk_left_rail.sketch, amount=arm_y)
 
-        # Right arm: inner face at right_inner_x, hypotenuse slopes toward -X (centre)
+        # Right arm: inner face at right_inner_x, apex toward -X (centre)
         with BuildSketch(arm_plane) as sk_right_rail:
             with BuildLine():
                 Polyline(
-                    (right_inner_x,                  z_bot_rail),
-                    (right_inner_x,                  z_top_rail),
-                    (right_inner_x - c.groove_depth, z_top_rail),
+                    (right_inner_x,              z_bot_rail),
+                    (right_inner_x,              z_top_rail),
+                    (right_inner_x - rail_reach, z_mid_rail),
                     close=True,
                 )
             make_face()
