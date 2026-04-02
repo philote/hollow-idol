@@ -30,25 +30,26 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
       │                      │  ← two arms, each outer_y/2 deep
       └──────────────────────┘
 
-    The groove runs along the bottom inner edge of all three walls (U-path),
-    forming the track the bottom panel slides into.
+    The groove is formed by additive top rails on the inner face of all three
+    walls (U-path). The C-piece floor is the bottom surface; each rail
+    overhangs the panel edge to retain it. Panel slides along the floor.
     Flanges project outward from the open arm-tip faces.
 
     Mirror in X to get the `]` piece.
     """
     c = cfg
 
-    # Half the short dimension — each arm extends this far inward
     arm_y = c.outer_y / 2
+    inner_x = c.outer_x - 2 * c.wall
 
-    # ── 1. Long outer wall (full X width, arm_y deep, full Z tall) ──────────
     with BuildPart() as wp:
 
-        # Long wall slab — wall-thick only, sits at the back (−Y)
+        # ── 1. Three wall slabs ────────────────────────────────────────────
+        # Back wall — full X width, wall thick, full Z
         with Locations((0, -(c.outer_y / 2 - c.wall / 2), c.outer_z / 2)):
             Box(c.outer_x, c.wall, c.outer_z)
 
-        # Left arm (−X end) — same half as the long wall, extending to the opening
+        # Left arm (−X end)
         with Locations((-(c.outer_x / 2 - c.wall / 2), -arm_y / 2, c.outer_z / 2)):
             Box(c.wall, arm_y, c.outer_z)
 
@@ -56,48 +57,47 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         with Locations(((c.outer_x / 2 - c.wall / 2), -arm_y / 2, c.outer_z / 2)):
             Box(c.wall, arm_y, c.outer_z)
 
-        # ── 2. Hollow interior of long wall (leave wall thickness on three sides) ──
-        inner_x = c.outer_x - 2 * c.wall
-        hollow_y = arm_y - c.wall  # interior depth of long-wall cavity
-        with Locations((0, -(c.outer_y / 2 - arm_y / 2) + c.wall / 2,
-                         c.wall + hollow_y / 2 + c.groove_width)):
-            # subtract interior above the groove level
-            interior_z = c.outer_z - c.wall - c.groove_width
-            Box(inner_x, hollow_y, interior_z, mode=Mode.SUBTRACT)
+        # ── 2. Back wall top rail (additive) ──────────────────────────────
+        # Protrudes groove_depth in +Y from back wall inner face.
+        # Bottom face of rail at Z = groove_width; panel slides under it.
+        back_inner_y = -(c.outer_y / 2 - c.wall)
+        rail_cz = c.groove_width + c.groove_depth / 2
+        with Locations((0, back_inner_y + c.groove_depth / 2, rail_cz)):
+            Box(inner_x, c.groove_depth, c.groove_depth)
 
-        # ── 3. Groove channel along bottom inner edge of long wall ──────────
-        # Rectangular slot: groove_width tall, groove_depth into the wall
-        groove_cz = c.wall + c.groove_width / 2
-        groove_cy = -(c.outer_y / 2 - c.wall / 2)  # inner face of long wall
-        with Locations((0, groove_cy - c.groove_depth / 2, groove_cz)):
-            Box(inner_x, c.groove_depth, c.groove_width, mode=Mode.SUBTRACT)
+        # ── 3. Left arm top rail (additive) ───────────────────────────────
+        # Protrudes groove_depth in +X from left arm inner face.
+        left_inner_x = -(c.outer_x / 2 - c.wall)
+        with Locations((left_inner_x + c.groove_depth / 2, -arm_y / 2, rail_cz)):
+            Box(c.groove_depth, arm_y, c.groove_depth)
 
-        # ── 4. Groove channel along bottom inner edge of left arm ──────────
-        arm_inner_x = -(c.outer_x / 2 - c.wall)  # inner face of left arm
-        arm_inner_y = arm_y - c.wall / 2
-        # groove runs in Y direction along left arm interior face
-        with Locations((arm_inner_x - c.groove_depth / 2, arm_inner_y / 2, groove_cz)):
-            Box(c.groove_depth, arm_inner_y, c.groove_width, mode=Mode.SUBTRACT)
+        # ── 4. Right arm top rail (additive) ──────────────────────────────
+        right_inner_x = c.outer_x / 2 - c.wall
+        with Locations((right_inner_x - c.groove_depth / 2, -arm_y / 2, rail_cz)):
+            Box(c.groove_depth, arm_y, c.groove_depth)
 
-        # ── 5. Groove channel along bottom inner edge of right arm ─────────
-        arm_inner_x_r = c.outer_x / 2 - c.wall
-        with Locations((arm_inner_x_r + c.groove_depth / 2, arm_inner_y / 2, groove_cz)):
-            Box(c.groove_depth, arm_inner_y, c.groove_width, mode=Mode.SUBTRACT)
-
-        # ── 6. Flanges at open arm tips ────────────────────────────────────
-        # Flange tabs project outward (+Y) from each arm tip
+        # ── 5. Flanges at open arm tips ────────────────────────────────────
         flange_cz = c.outer_z / 2
-        # Flanges stick outward in X from the arm outer face, at the arm open tip (Y=0).
-        # This creates a corner ledge binder clips grip when clamping in Y.
-        flange_cy = -c.flange_thickness / 2  # centred on Y=0, within arm tip
+        flange_cy = -c.flange_thickness / 2
 
-        # Left arm flange — outward in -X from arm outer face at X=-outer_x/2
+        # Left arm flange — outward in -X
         with Locations((-(c.outer_x / 2 + c.flange_width / 2), flange_cy, flange_cz)):
             Box(c.flange_width, c.flange_thickness, c.outer_z)
 
         # Right arm flange — outward in +X
         with Locations(((c.outer_x / 2 + c.flange_width / 2), flange_cy, flange_cz)):
             Box(c.flange_width, c.flange_thickness, c.outer_z)
+
+        # ── 6. Small back tabs at outer tip of each main flange ────────────
+        back_tab_cy = -(c.flange_thickness + c.flange_thickness / 2)
+
+        back_tab_cx_l = -(c.outer_x / 2 + c.flange_width - c.flange_thickness / 2)
+        with Locations((back_tab_cx_l, back_tab_cy, flange_cz)):
+            Box(c.flange_thickness, c.flange_thickness, c.outer_z)
+
+        back_tab_cx_r = c.outer_x / 2 + c.flange_width - c.flange_thickness / 2
+        with Locations((back_tab_cx_r, back_tab_cy, flange_cz)):
+            Box(c.flange_thickness, c.flange_thickness, c.outer_z)
 
     return wp.part
 
@@ -108,45 +108,35 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
     """
     Sliding floor panel.
 
-    The tongue (thin lip) around all 4 edges fits into the U-groove of each
-    wall piece. Panel slides in along the short-arm grooves until the leading
-    edge seats against the long-wall groove stop.
+    Flat slab whose edges slide under the additive top rails of the wall pieces.
+    Top edge is chamfered to guide the panel under the rail entry.
 
-    convex_keys=True  → hemisphere bumps protrude up (Half A — creates concave
-                         impression in plaster parting face)
+    convex_keys=True  → hemisphere bumps protrude up (Half A)
     convex_keys=False → hemispherical divots cut in (Half B)
     has_notch=True    → rectangular ID notch on one short edge (Half A only)
     """
     c = cfg
 
-    tongue_t = c.groove_width - c.tongue_clearance   # tongue thickness (Z)
-    tongue_d = c.groove_depth - c.tongue_clearance   # tongue width into groove
-
-    # Panel outer footprint: fits inside assembled groove slot
-    panel_x = c.outer_x - 2 * c.wall + 2 * tongue_d - c.tongue_clearance
-    panel_y = c.outer_y - 2 * c.wall + 2 * tongue_d - c.tongue_clearance
-
-    # Panel body thickness (above the tongue ledge)
-    body_t = c.wall - tongue_t  # total panel height = wall thickness
-
-    inner_x = panel_x - 2 * tongue_d   # exposed interior face size
-    inner_y = panel_y - 2 * tongue_d
+    # Panel fits between wall inner faces with clearance
+    panel_x = c.outer_x - 2 * c.wall - c.tongue_clearance
+    panel_y = c.outer_y - 2 * c.wall - c.tongue_clearance
+    panel_h = c.groove_width - c.tongue_clearance
+    chamfer_size = c.groove_depth / 2  # top edge bevel to guide under rail
 
     with BuildPart() as bp:
 
-        # ── 1. Full panel base (tongue level) ────────────────────────────
-        Box(panel_x, panel_y, tongue_t,
+        # ── 1. Flat slab ──────────────────────────────────────────────────
+        Box(panel_x, panel_y, panel_h,
             align=(Align.CENTER, Align.CENTER, Align.MIN))
 
-        # ── 2. Inner body raised above tongue ────────────────────────────
-        with Locations((0, 0, tongue_t)):
-            Box(inner_x, inner_y, body_t,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # ── 2. Chamfer top perimeter edge ─────────────────────────────────
+        top_edges = bp.part.edges().group_by(Axis.Z)[-1]
+        chamfer(top_edges, chamfer_size)
 
         # ── 3. Registration keys on top face ─────────────────────────────
-        top_z = tongue_t + body_t
-        hemi_x = inner_x / 2 - c.hemi_offset
-        hemi_y = inner_y / 2 - c.hemi_offset
+        top_z = panel_h
+        hemi_x = panel_x / 2 - c.hemi_offset
+        hemi_y = panel_y / 2 - c.hemi_offset
 
         if convex_keys:
             hemi_cz = top_z - (c.hemi_r - c.hemi_height)
@@ -175,10 +165,8 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
                 Sphere(c.hemi_r, mode=Mode.SUBTRACT)
 
         # ── 4. ID notch on −Y short edge (Half A only) ────────────────────
-        # Convex bump on top face → leaves a concave gap in plaster parting
-        # face, letting a tool be wedged in to pry the plaster halves apart.
         if has_notch:
-            notch_cy = -(inner_y / 2 - c.notch_w / 2)
+            notch_cy = -(panel_y / 2 - c.notch_w / 2)
             notch_cz = top_z + c.notch_h / 2
             with Locations((0, notch_cy, notch_cz)):
                 Box(c.notch_l, c.notch_w, c.notch_h)
