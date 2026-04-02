@@ -31,6 +31,14 @@ Parametric mold case generator for ceramic slip casting. Generates build123d Pyt
 - Output: STL and STEP
 - Editor: VS Code
 
+## CRITICAL — Testing Before Declaring Done
+After ANY geometry change, you MUST run both of the following before telling the user you are done:
+
+1. `pytest tests/ -v` — all 51 tests must pass
+2. `python -m hollow_idol.reporter` — paste the full output into your response
+
+Do not say "done", "complete", or "should work" without showing the reporter output and confirming all checks pass. If tests fail, fix the issue first.
+
 ## CRITICAL — Development Approach
 Build and verify geometry incrementally. Do not generate full architecture until each geometric primitive is confirmed working. The failure mode is generating plausible-looking code that produces incorrect geometry.
 
