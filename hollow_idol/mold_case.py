@@ -57,26 +57,68 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         with Locations(((c.outer_x / 2 - c.wall / 2), -arm_y / 2, c.outer_z / 2)):
             Box(c.wall, arm_y, c.outer_z)
 
-        # ── 2. Back wall top rail (additive) ──────────────────────────────
-        # Protrudes groove_depth in +Y from back wall inner face.
-        # Bottom face of rail at Z = groove_width; panel slides under it.
         back_inner_y = -(c.outer_y / 2 - c.wall)
-        rail_cz = c.groove_width + c.groove_depth / 2
-        with Locations((0, back_inner_y + c.groove_depth / 2, rail_cz)):
+        left_inner_x  = -(c.outer_x / 2 - c.wall)
+        right_inner_x =  (c.outer_x / 2 - c.wall)
+
+        # ── 2-4. Bottom ledges on all 3 inner wall faces ───────────────────
+        # Panel rests on top of these (ledge top face at Z = groove_depth).
+        ledge_cz = c.groove_depth / 2
+        with Locations((0, back_inner_y + c.groove_depth / 2, ledge_cz)):
             Box(inner_x, c.groove_depth, c.groove_depth)
-
-        # ── 3. Left arm top rail (additive) ───────────────────────────────
-        # Protrudes groove_depth in +X from left arm inner face.
-        left_inner_x = -(c.outer_x / 2 - c.wall)
-        with Locations((left_inner_x + c.groove_depth / 2, -arm_y / 2, rail_cz)):
+        with Locations((left_inner_x + c.groove_depth / 2, -arm_y / 2, ledge_cz)):
+            Box(c.groove_depth, arm_y, c.groove_depth)
+        with Locations((right_inner_x - c.groove_depth / 2, -arm_y / 2, ledge_cz)):
             Box(c.groove_depth, arm_y, c.groove_depth)
 
-        # ── 4. Right arm top rail (additive) ──────────────────────────────
-        right_inner_x = c.outer_x / 2 - c.wall
-        with Locations((right_inner_x - c.groove_depth / 2, -arm_y / 2, rail_cz)):
-            Box(c.groove_depth, arm_y, c.groove_depth)
+        # ── 5-7. Top rails on all 3 inner wall faces (triangular prism) ───
+        # Right-triangle cross-section mates with the chamfered top edge of the
+        # bottom panel. Right angle at the wall-face top corner; 45° hypotenuse
+        # faces the groove opening.
+        z_bot_rail = c.groove_depth + c.groove_width
+        z_top_rail = z_bot_rail + c.groove_depth
 
-        # ── 5. Flanges at open arm tips ────────────────────────────────────
+        # Back wall rail — triangle in Y-Z plane, extruded along X (centred at X=0)
+        with BuildSketch(Plane.YZ) as sk_back_rail:
+            with BuildLine():
+                Polyline(
+                    (back_inner_y,                  z_bot_rail),
+                    (back_inner_y,                  z_top_rail),
+                    (back_inner_y + c.groove_depth, z_top_rail),
+                    close=True,
+                )
+            make_face()
+        extrude(sk_back_rail.sketch, amount=inner_x / 2, both=True)
+
+        # Arm rails — triangle in X-Z plane, extruded along -Y into each arm.
+        # Custom plane with normal pointing -Y so extrude travels from Y=0 back.
+        arm_plane = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, -1, 0))
+
+        # Left arm: inner face at left_inner_x, hypotenuse slopes toward +X (centre)
+        with BuildSketch(arm_plane) as sk_left_rail:
+            with BuildLine():
+                Polyline(
+                    (left_inner_x,                  z_bot_rail),
+                    (left_inner_x,                  z_top_rail),
+                    (left_inner_x + c.groove_depth, z_top_rail),
+                    close=True,
+                )
+            make_face()
+        extrude(sk_left_rail.sketch, amount=arm_y)
+
+        # Right arm: inner face at right_inner_x, hypotenuse slopes toward -X (centre)
+        with BuildSketch(arm_plane) as sk_right_rail:
+            with BuildLine():
+                Polyline(
+                    (right_inner_x,                  z_bot_rail),
+                    (right_inner_x,                  z_top_rail),
+                    (right_inner_x - c.groove_depth, z_top_rail),
+                    close=True,
+                )
+            make_face()
+        extrude(sk_right_rail.sketch, amount=arm_y)
+
+        # ── 9. Flanges at open arm tips ────────────────────────────────────
         flange_cz = c.outer_z / 2
         flange_cy = -c.flange_thickness / 2
 
@@ -170,6 +212,20 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
             notch_cz = top_z + c.notch_h / 2
             with Locations((0, notch_cy, notch_cz)):
                 Box(c.notch_l, c.notch_w, c.notch_h)
+            # Chamfer bottom corners of notch (where notch meets panel top face)
+            # so notch slides past arm rail entry without snagging.
+            try:
+                notch_base_edges = [
+                    e for e in bp.part.edges()
+                    if (abs(e.center().Z - top_z) < 0.5
+                        and (abs(e.center().Y - (notch_cy + c.notch_w / 2)) < 0.5
+                             or abs(e.center().Y - (notch_cy - c.notch_w / 2)) < 0.5)
+                        and abs(e.length - c.notch_l) < 1.0)
+                ]
+                if notch_base_edges:
+                    chamfer(notch_base_edges, min(c.notch_w / 3, 2.0))
+            except Exception:
+                pass
 
     return bp.part
 

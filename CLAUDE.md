@@ -10,6 +10,21 @@ Parametric mold case generator for ceramic slip casting. Generates build123d Pyt
 6. Plaster mold used for slip casting ceramic pieces
 7. Fired ceramic shrinks ~13% (varies by clay body)
 
+## 3D CAD Domain Rules
+- This project involves parametric mold/case generation using build123d and CadQuery
+- Keys go on the INTERIOR floor/flat surfaces of mold halves, NOT through exterior walls
+- Notches are the receiving counterpart and must align with keys on the mating surface
+- Always think in terms of: parting line, draft angles, interior cavity, exterior shell
+- When unsure about 3D geometry placement, ASK before implementing
+
+### Reference Images
+- When the user provides a reference image (e.g., TinkerCAD screenshot), describe what you see in the image BACK to the user before writing code, to confirm shared understanding of the geometry
+
+## Working Style
+- Never run subagent/background commands without first explaining what you're about to do and why
+- When performing multi-step operations, narrate each step before executing it
+- If a task requires exploration, list the plan first and get approval
+
 ## Stack
 - Python 3.11+
 - build123d

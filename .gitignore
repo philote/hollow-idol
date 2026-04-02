@@ -227,3 +227,4 @@ __marimo__/
 #OS
 .DS_Store
 output/*
+docs/issues/*
