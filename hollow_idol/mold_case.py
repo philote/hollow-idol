@@ -61,6 +61,33 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         left_inner_x  = -(c.outer_x / 2 - c.wall)
         right_inner_x =  (c.outer_x / 2 - c.wall)
 
+        # ── Interior corner chamfers ───────────────────────────────────────
+        # Fill the 2 concave vertical corners where each arm's inner face
+        # meets the back wall's inner face with a right-triangle prism.
+        # Left corner: right angle at (left_inner_x, back_inner_y), fills +X/+Y
+        with BuildSketch(Plane.XY) as sk_lc:
+            with BuildLine():
+                Polyline(
+                    (left_inner_x,              back_inner_y),
+                    (left_inner_x + c.chamfer,  back_inner_y),
+                    (left_inner_x,              back_inner_y + c.chamfer),
+                    close=True,
+                )
+            make_face()
+        extrude(sk_lc.sketch, amount=c.outer_z)
+
+        # Right corner: right angle at (right_inner_x, back_inner_y), fills -X/+Y
+        with BuildSketch(Plane.XY) as sk_rc:
+            with BuildLine():
+                Polyline(
+                    (right_inner_x,             back_inner_y),
+                    (right_inner_x - c.chamfer, back_inner_y),
+                    (right_inner_x,             back_inner_y + c.chamfer),
+                    close=True,
+                )
+            make_face()
+        extrude(sk_rc.sketch, amount=c.outer_z)
+
         # ── 2-4. Bottom ledges on all 3 inner wall faces ───────────────────
         # Panel rests on top of these (ledge top face at Z = groove_depth).
         ledge_cz = c.groove_depth / 2
