@@ -38,7 +38,6 @@ def _expected(cfg: MoldConfig) -> dict:
     """Derived dimension expectations from config math."""
     panel_x = cfg.outer_x - 2 * cfg.wall - cfg.tongue_clearance
     panel_y = cfg.outer_y - 2 * cfg.wall - cfg.tongue_clearance
-    slab_h  = cfg.groove_width - cfg.tongue_clearance
     key_x   = (panel_x / 2) - cfg.hemi_offset
     key_y   = (panel_y / 2) - cfg.hemi_offset
     return {
@@ -47,7 +46,7 @@ def _expected(cfg: MoldConfig) -> dict:
         "wall_z_expected":   round(cfg.outer_z, 3),
         "panel_x_expected":  round(panel_x, 3),
         "panel_y_expected":  round(panel_y, 3),
-        "slab_h_expected":   round(slab_h, 3),
+        "slab_h_expected":   5.0,  # static panel height
         "hemi_centre_x":     round(key_x, 3),
         "hemi_centre_y":     round(key_y, 3),
         "hemi_fits_x_margin": round(key_x - cfg.hemi_r, 3),

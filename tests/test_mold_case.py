@@ -188,10 +188,10 @@ class TestBottomDimensions:
 
     @pytest.mark.parametrize("cfg", ALL_CONFIGS)
     def test_panel_slab_height_lower_bound(self, cfg):
-        """Z must be at least groove_width - tongue_clearance (slab thickness)."""
+        """Z must be at least the static panel height (5.0mm)."""
         part = build_bottom(cfg, convex_keys=True, has_notch=False)
         _, _, sz = bbox_size(part)
-        slab_h = cfg.groove_width - cfg.tongue_clearance
+        slab_h = 5.0  # static — matches panel_h in build_bottom
         assert sz >= slab_h - TOL, (
             f"panel Z={sz:.3f} is less than slab height {slab_h:.3f}"
         )
@@ -201,7 +201,7 @@ class TestBottomDimensions:
         """Z must not exceed slab + key height + notch headroom."""
         part = build_bottom(cfg, convex_keys=True, has_notch=True)
         _, _, sz = bbox_size(part)
-        slab_h = cfg.groove_width - cfg.tongue_clearance
+        slab_h = 5.0  # static
         max_z = slab_h + cfg.hemi_height + cfg.notch_h + TOL
         assert sz <= max_z, (
             f"panel Z={sz:.3f} exceeds max expected {max_z:.3f}"

@@ -89,23 +89,28 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         extrude(sk_rc.sketch, amount=c.outer_z)
 
         # ── 2-4. Bottom ledges on all 3 inner wall faces ───────────────────
-        # Panel rests on top of these (ledge top face at Z = groove_depth).
-        ledge_cz = c.groove_depth / 2
-        with Locations((0, back_inner_y + c.groove_depth / 2, ledge_cz)):
-            Box(inner_x, c.groove_depth, c.groove_depth)
-        with Locations((left_inner_x + c.groove_depth / 2, -arm_y / 2, ledge_cz)):
-            Box(c.groove_depth, arm_y, c.groove_depth)
-        with Locations((right_inner_x - c.groove_depth / 2, -arm_y / 2, ledge_cz)):
-            Box(c.groove_depth, arm_y, c.groove_depth)
+        # Panel rests on top of these. Fixed dimensions regardless of params:
+        # 2mm tall (thin lip), 8mm deep (wide protrusion into cavity).
+        ledge_t = 2.0   # thickness (Z height) — static
+        ledge_d = 8.0   # depth (protrusion into cavity) — static
+        ledge_cz = ledge_t / 2
+        with Locations((0, back_inner_y + ledge_d / 2, ledge_cz)):
+            Box(inner_x, ledge_d, ledge_t)
+        with Locations((left_inner_x + ledge_d / 2, -arm_y / 2, ledge_cz)):
+            Box(ledge_d, arm_y, ledge_t)
+        with Locations((right_inner_x - ledge_d / 2, -arm_y / 2, ledge_cz)):
+            Box(ledge_d, arm_y, ledge_t)
 
         # ── 5-7. Top rails on all 3 inner wall faces (triangular prism) ───
-        # Right-triangle cross-section mates with the chamfered top edge of the
-        # bottom panel. Right angle at the wall-face top corner; 45° hypotenuse
-        # faces the groove opening.
-        z_bot_rail = c.groove_depth + c.groove_width
-        z_top_rail = z_bot_rail + c.groove_depth
-        z_mid_rail = z_bot_rail + c.groove_depth / 2  # apex of symmetric wedge
-        rail_reach = c.groove_depth / 2               # horizontal extent to apex
+        # Symmetric wedge — apex sits exactly at ledge_top + panel_h so the
+        # rail captures the panel regardless of outer mold dimensions.
+        # All values are static; groove_width/groove_depth no longer drive this.
+        _panel_h   = 5.0   # must match panel_h in build_bottom
+        _rail_h    = 4.0   # total Z span of the wedge (static)
+        rail_reach = 2.0   # horizontal extent to apex (static)
+        z_mid_rail = ledge_t + _panel_h          # apex Z = 2 + 5 = 7.0
+        z_bot_rail = z_mid_rail - _rail_h / 2   # 5.0
+        z_top_rail = z_mid_rail + _rail_h / 2   # 9.0
 
         # Back wall rail — symmetric wedge in Y-Z plane, extruded along X
         with BuildSketch(Plane.YZ) as sk_back_rail:
@@ -190,8 +195,8 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
     # Panel fits between wall inner faces with clearance
     panel_x = c.outer_x - 2 * c.wall - c.tongue_clearance
     panel_y = c.outer_y - 2 * c.wall - c.tongue_clearance
-    panel_h = c.groove_width - c.tongue_clearance
-    chamfer_size = c.groove_depth / 2  # top edge bevel to guide under rail
+    panel_h = 5.0   # static — must match _panel_h in build_wall_piece
+    chamfer_size = 2.0   # static — matches rail_reach; guides panel past apex
 
     with BuildPart() as bp:
 
