@@ -208,6 +208,23 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
         top_edges = bp.part.edges().group_by(Axis.Z)[-1]
         chamfer(top_edges, chamfer_size)
 
+        # ── 2b. Corner cuts to clear wall interior chamfers ───────────────
+        # The wall piece has triangular prisms filling its interior corners.
+        # Cut matching triangles from the panel corners so it slides in fully.
+        half_px = panel_x / 2
+        half_py = panel_y / 2
+        for sx, sy in [(+1, +1), (+1, -1), (-1, +1), (-1, -1)]:
+            with BuildSketch(Plane.XY) as sk_cc:
+                with BuildLine():
+                    Polyline(
+                        (sx * half_px,               sy * half_py),
+                        (sx * (half_px - c.chamfer), sy * half_py),
+                        (sx * half_px,               sy * (half_py - c.chamfer)),
+                        close=True,
+                    )
+                make_face()
+            extrude(sk_cc.sketch, amount=panel_h, mode=Mode.SUBTRACT)
+
         # ── 3. Registration keys on top face ─────────────────────────────
         top_z = panel_h
         hemi_x = panel_x / 2 - c.hemi_offset
