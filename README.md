@@ -6,8 +6,27 @@ Parametric mold case generator for ceramic slip casting. Given outer dimensions,
 
 ## Setup
 
+**Requires Python 3.10–3.12.** The `build123d` dependency relies on `cadquery-ocp`, which only has pre-built wheels for these versions. Python 3.13+ is not yet supported.
+
+### macOS (using pyenv)
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+# Install pyenv if needed
+brew install pyenv
+
+# Install Python 3.11 and create venv
+pyenv install 3.11.9
+~/.pyenv/versions/3.11.9/bin/python -m venv .venv
+source .venv/bin/activate
+pip install build123d pytest
+```
+
+### Linux / Windows
+
+```bash
+# Ensure you have Python 3.10-3.12, then:
+python3.11 -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install build123d pytest
 ```
 
