@@ -13,6 +13,7 @@ from build123d import Part
 
 from hollow_idol.config import MoldConfig, PrinterConfig
 from hollow_idol.mold_case import (
+    PANEL_HEIGHT,
     build_wall_piece,
     build_bottom,
     build_half_a,
@@ -32,8 +33,6 @@ SMALL_CFG = MoldConfig(
     outer_y=60.0,
     outer_z=30.0,
     wall=4.0,
-    groove_depth=3.0,
-    groove_width=4.0,
     hemi_r=5.0,
     hemi_height=2.5,
     hemi_offset=12.0,
@@ -46,8 +45,6 @@ LARGE_CFG = MoldConfig(
     outer_y=120.0,
     outer_z=60.0,
     wall=6.0,
-    groove_depth=5.0,
-    groove_width=6.0,
     hemi_r=8.0,
     hemi_height=4.0,
     hemi_offset=20.0,
@@ -161,7 +158,7 @@ class TestBottomDimensions:
     Panel bounding box expectations:
       X:  outer_x - 2*wall - tongue_clearance
       Y:  outer_y - 2*wall - tongue_clearance
-      Z:  groove_width - tongue_clearance          (slab height, before keys/notch)
+      Z:  static panel height                      (slab height, before keys/notch)
 
     Keys and notch protrude above the slab — Z total will be larger.
     We check the floor-to-groove height via the minimum Z span of the slab body,
@@ -191,7 +188,7 @@ class TestBottomDimensions:
         """Z must be at least the static panel height (5.0mm)."""
         part = build_bottom(cfg, convex_keys=True, has_notch=False)
         _, _, sz = bbox_size(part)
-        slab_h = 5.0  # static — matches panel_h in build_bottom
+        slab_h = PANEL_HEIGHT
         assert sz >= slab_h - TOL, (
             f"panel Z={sz:.3f} is less than slab height {slab_h:.3f}"
         )
@@ -201,7 +198,7 @@ class TestBottomDimensions:
         """Z must not exceed slab + key height + notch headroom."""
         part = build_bottom(cfg, convex_keys=True, has_notch=True)
         _, _, sz = bbox_size(part)
-        slab_h = 5.0  # static
+        slab_h = PANEL_HEIGHT
         max_z = slab_h + cfg.hemi_height + cfg.notch_h + TOL
         assert sz <= max_z, (
             f"panel Z={sz:.3f} exceeds max expected {max_z:.3f}"

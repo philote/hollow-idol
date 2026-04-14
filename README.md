@@ -65,7 +65,8 @@ pytest tests/ -v                  # 51 geometry + dimension tests
 python -m hollow_idol.reporter    # human-readable dimension check
 ```
 
-The reporter accepts the same flags as the main CLI and exits non-zero if any check fails.
+The reporter accepts the geometry-sizing and fit-check flags shown below, plus `--json`,
+and exits non-zero if any check fails.
 
 ---
 
@@ -81,8 +82,6 @@ The reporter accepts the same flags as the main CLI and exits non-zero if any ch
 | `--hemi-r` | 6 mm | Registration key sphere radius |
 | `--hemi-height` | 3 mm | Dome / divot height |
 | `--hemi-offset` | 15 mm | Key centre distance from interior corner |
-| `--groove-depth` | 4 mm | Panel groove depth |
-| `--groove-width` | 5 mm | Panel groove slot width |
 | `--tongue-clearance` | 0.25 mm | Panel fit clearance |
 | `--flange-width` | 10 mm | Binder clip flange width |
 | `--flange-thickness` | 3 mm | Flange thickness |

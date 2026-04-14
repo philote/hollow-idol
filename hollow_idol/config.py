@@ -32,10 +32,8 @@ class MoldConfig:
     notch_w: float = 5.0        # width into cavity
     notch_h: float = 10.0       # protrusion height above panel face
 
-    # Groove-and-tongue joint (wall pieces ↔ bottom panel)
-    groove_depth: float = 4.0        # groove depth into wall (= tongue depth)
-    groove_width: float = 5.0        # groove slot width
-    tongue_clearance: float = 0.25   # fit clearance: tongue is this much narrower than groove
+    # Sliding panel fit
+    tongue_clearance: float = 0.25   # fit clearance between panel and wall opening
 
     # Flanges for binder clips (at arm-tip mating faces)
     flange_width: float = 10.0       # clip grip surface width

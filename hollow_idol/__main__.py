@@ -25,10 +25,8 @@ def main() -> None:
     parser.add_argument("--hemi-height", type=float, default=3.0,   metavar="MM", help="Dome/divot height (default 3)")
     parser.add_argument("--hemi-offset", type=float, default=15.0,  metavar="MM", help="Key centre distance from interior corner (default 15)")
 
-    # Groove / tongue joint
-    parser.add_argument("--groove-depth",      type=float, default=4.0,  metavar="MM", help="Groove depth into wall (default 4)")
-    parser.add_argument("--groove-width",      type=float, default=5.0,  metavar="MM", help="Groove slot width (default 5)")
-    parser.add_argument("--tongue-clearance",  type=float, default=0.25, metavar="MM", help="Tongue fit clearance (default 0.25)")
+    # Sliding panel fit
+    parser.add_argument("--tongue-clearance",  type=float, default=0.25, metavar="MM", help="Panel fit clearance (default 0.25)")
 
     # Flanges
     parser.add_argument("--flange-width",     type=float, default=10.0, metavar="MM", help="Binder clip flange width (default 10)")
@@ -55,8 +53,6 @@ def main() -> None:
         hemi_r=args.hemi_r,
         hemi_height=args.hemi_height,
         hemi_offset=args.hemi_offset,
-        groove_depth=args.groove_depth,
-        groove_width=args.groove_width,
         tongue_clearance=args.tongue_clearance,
         flange_width=args.flange_width,
         flange_thickness=args.flange_thickness,

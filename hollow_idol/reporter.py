@@ -14,9 +14,8 @@ import argparse
 import json
 import sys
 
-from hollow_idol.config import MoldConfig, PrinterConfig
-from hollow_idol.mold_case import build_wall_piece, build_bottom, build_half_a, build_half_b
-from hollow_idol import printers
+from hollow_idol.config import MoldConfig
+from hollow_idol.mold_case import PANEL_HEIGHT, build_wall_piece, build_bottom
 
 
 def _bbox_dict(part) -> dict:
@@ -46,7 +45,7 @@ def _expected(cfg: MoldConfig) -> dict:
         "wall_z_expected":   round(cfg.outer_z, 3),
         "panel_x_expected":  round(panel_x, 3),
         "panel_y_expected":  round(panel_y, 3),
-        "slab_h_expected":   5.0,  # static panel height
+        "slab_h_expected":   round(PANEL_HEIGHT, 3),
         "hemi_centre_x":     round(key_x, 3),
         "hemi_centre_y":     round(key_y, 3),
         "hemi_fits_x_margin": round(key_x - cfg.hemi_r, 3),
@@ -67,8 +66,6 @@ def run_report(cfg: MoldConfig, json_only: bool = False) -> dict:
             "outer_y":          cfg.outer_y,
             "outer_z":          cfg.outer_z,
             "wall":             cfg.wall,
-            "groove_depth":     cfg.groove_depth,
-            "groove_width":     cfg.groove_width,
             "tongue_clearance": cfg.tongue_clearance,
             "hemi_r":           cfg.hemi_r,
             "hemi_height":      cfg.hemi_height,
@@ -117,7 +114,7 @@ def _pretty_print(r: dict) -> None:
     print("  MOLD GEOMETRY REPORT")
     print("=" * 60)
     print(f"\nConfig: {cfg['outer_x']} x {cfg['outer_y']} x {cfg['outer_z']} mm  "
-          f"(wall={cfg['wall']}, groove={cfg['groove_width']}x{cfg['groove_depth']})")
+          f"(wall={cfg['wall']}, panel clearance={cfg['tongue_clearance']})")
 
     print("\n-- Wall piece (C-frame) --")
     w = geo["wall_piece"]
@@ -154,8 +151,6 @@ def main() -> None:
     parser.add_argument("--outer-y",          type=float, default=80.0)
     parser.add_argument("--outer-z",          type=float, default=40.0)
     parser.add_argument("--wall",             type=float, default=5.0)
-    parser.add_argument("--groove-depth",     type=float, default=4.0)
-    parser.add_argument("--groove-width",     type=float, default=5.0)
     parser.add_argument("--tongue-clearance", type=float, default=0.25)
     parser.add_argument("--hemi-r",           type=float, default=6.0)
     parser.add_argument("--hemi-height",      type=float, default=3.0)
@@ -170,8 +165,6 @@ def main() -> None:
         outer_y=args.outer_y,
         outer_z=args.outer_z,
         wall=args.wall,
-        groove_depth=args.groove_depth,
-        groove_width=args.groove_width,
         tongue_clearance=args.tongue_clearance,
         hemi_r=args.hemi_r,
         hemi_height=args.hemi_height,
