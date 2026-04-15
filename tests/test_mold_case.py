@@ -155,6 +155,13 @@ class TestWallPieceDimensions:
             f"wall Z={sz:.3f}, expected {cfg.outer_z:.3f}"
         )
 
+    @pytest.mark.parametrize("cfg", ALL_CONFIGS)
+    def test_pour_side_wall_has_same_bbox_but_less_volume(self, cfg):
+        full_wall = build_wall_piece(cfg)
+        pour_wall = build_wall_piece(cfg, omit_pour_side_rail=True)
+        assert bbox_size(full_wall) == pytest.approx(bbox_size(pour_wall), abs=TOL)
+        assert pour_wall.volume < full_wall.volume
+
 
 class TestBottomDimensions:
     """
@@ -259,6 +266,13 @@ class TestFitInvariants:
             assert panel_half_y - abs(key_y) > cfg.key_radius, (
                 f"key Y={key_y:.3f} too close to panel edge (key_radius={cfg.key_radius})"
             )
+
+    @pytest.mark.parametrize("cfg", ALL_CONFIGS)
+    def test_each_half_contains_one_full_and_one_pour_wall(self, cfg):
+        half_a = build_half_a(cfg)
+        half_b = build_half_b(cfg)
+        for wall_left, wall_right, _bottom in (half_a, half_b):
+            assert wall_left.volume != pytest.approx(wall_right.volume)
 
 
 class TestKeyLayouts:

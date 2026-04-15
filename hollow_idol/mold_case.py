@@ -6,7 +6,7 @@ Each mold half is made of three parts:
   - bottom                  : sliding floor panel with registration keys
 
 Public API:
-    build_wall_piece(cfg) -> Part   C-frame (mirror in X for the other side)
+    build_wall_piece(cfg, *, omit_pour_side_rail=False) -> Part
     build_bottom(cfg, *, convex_keys, has_notch) -> Part
     generate(cfg, printer) -> (wall_left_a, wall_right_a, bottom_a,
                                 wall_left_b, wall_right_b, bottom_b)
@@ -43,7 +43,7 @@ def key_positions(cfg: MoldConfig, panel_x: float, panel_y: float) -> list[tuple
 
 # ── Wall piece ─────────────────────────────────────────────────────────────────
 
-def build_wall_piece(cfg: MoldConfig) -> Part:
+def build_wall_piece(cfg: MoldConfig, *, omit_pour_side_rail: bool = False) -> Part:
     """
     C-shaped `[` wall frame (one of two per mold half).
 
@@ -53,9 +53,10 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
       │                      │  ← two arms, each outer_y/2 deep
       └──────────────────────┘
 
-    The groove is formed by additive top rails on the inner face of all three
-    walls (U-path). The C-piece floor is the bottom surface; each rail
-    overhangs the panel edge to retain it. Panel slides along the floor.
+    The groove is formed by additive top rails on the inner face of the walls.
+    When `omit_pour_side_rail` is true, the short pour side is intentionally
+    left square so a model wall or funnel can register against it. Panel slides
+    along the floor.
     Flanges project outward from the open arm-tip faces.
 
     Mirror in X to get the `]` piece.
@@ -124,9 +125,9 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         with Locations((right_inner_x - ledge_d / 2, -arm_y / 2, ledge_cz)):
             Box(ledge_d, arm_y, ledge_t)
 
-        # ── 5-7. Top rails on all 3 inner wall faces (triangular prism) ───
+        # ── 5-7. Top rails on the inner wall faces (triangular prism) ─────
         # Symmetric wedge — apex sits exactly at ledge_top + panel_h so the
-        # rail captures the panel regardless of outer mold dimensions.
+        # rails capture the panel. The short pour-side rail is optional.
         # All joint dimensions here are static and intentionally not configurable.
         _panel_h = PANEL_HEIGHT
         _rail_h = RAIL_HEIGHT
@@ -135,17 +136,17 @@ def build_wall_piece(cfg: MoldConfig) -> Part:
         z_bot_rail = z_mid_rail - _rail_h / 2   # 5.0
         z_top_rail = z_mid_rail + _rail_h / 2   # 9.0
 
-        # Back wall rail — symmetric wedge in Y-Z plane, extruded along X
-        with BuildSketch(Plane.YZ) as sk_back_rail:
-            with BuildLine():
-                Polyline(
-                    (back_inner_y,                z_bot_rail),
-                    (back_inner_y,                z_top_rail),
-                    (back_inner_y + rail_reach,   z_mid_rail),
-                    close=True,
-                )
-            make_face()
-        extrude(sk_back_rail.sketch, amount=inner_x / 2, both=True)
+        if not omit_pour_side_rail:
+            with BuildSketch(Plane.YZ) as sk_back_rail:
+                with BuildLine():
+                    Polyline(
+                        (back_inner_y,                z_bot_rail),
+                        (back_inner_y,                z_top_rail),
+                        (back_inner_y + rail_reach,   z_mid_rail),
+                        close=True,
+                    )
+                make_face()
+            extrude(sk_back_rail.sketch, amount=inner_x / 2, both=True)
 
         # Arm rails — symmetric wedge in X-Z plane, extruded along -Y into each arm.
         arm_plane = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=(0, -1, 0))
@@ -207,7 +208,8 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
     Sliding floor panel.
 
     Flat slab whose edges slide under the additive top rails of the wall pieces.
-    Top edge is chamfered to guide the panel under the rail entry.
+    The dedicated pour edge stays square; the remaining top edges are chamfered
+    to guide the panel under the rail entry.
 
     convex_keys=True  → hemisphere bumps protrude up (Half A)
     convex_keys=False → hemispherical divots cut in (Half B)
@@ -228,8 +230,15 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
             align=(Align.CENTER, Align.CENTER, Align.MIN))
 
         # ── 2. Chamfer top perimeter edge ─────────────────────────────────
+        # Keep the dedicated pour edge square while preserving chamfers on the
+        # adjacent side edges so the panel still slides past the entry corners.
         top_edges = bp.part.edges().group_by(Axis.Z)[-1]
-        chamfer(top_edges, chamfer_size)
+        pour_edge_y = panel_y / 2
+        chamfer_edges = [
+            e for e in top_edges
+            if abs(e.center().Y - pour_edge_y) > 0.5
+        ]
+        chamfer(chamfer_edges, chamfer_size)
 
         # ── 2b. Corner cuts to clear wall interior chamfers ───────────────
         # The wall piece has triangular prisms filling its interior corners.
@@ -297,7 +306,7 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
 def build_half_a(cfg: MoldConfig) -> tuple[Part, Part, Part]:
     """Returns (wall_left, wall_right, bottom) for Half A."""
     wall = build_wall_piece(cfg)
-    wall_r = mirror(wall, about=Plane.YZ)
+    wall_r = mirror(build_wall_piece(cfg, omit_pour_side_rail=True), about=Plane.YZ)
     bottom = build_bottom(cfg, convex_keys=True, has_notch=True)
     return wall, wall_r, bottom
 
@@ -305,7 +314,7 @@ def build_half_a(cfg: MoldConfig) -> tuple[Part, Part, Part]:
 def build_half_b(cfg: MoldConfig) -> tuple[Part, Part, Part]:
     """Returns (wall_left, wall_right, bottom) for Half B."""
     wall = build_wall_piece(cfg)
-    wall_r = mirror(wall, about=Plane.YZ)
+    wall_r = mirror(build_wall_piece(cfg, omit_pour_side_rail=True), about=Plane.YZ)
     bottom = build_bottom(cfg, convex_keys=False, has_notch=False)
     return wall, wall_r, bottom
 
