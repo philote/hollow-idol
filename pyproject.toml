@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hollow-idol"
+version = "0.1.0"
+description = "Parametric mold case generator for ceramic slip casting"
+requires-python = ">=3.10,<3.13"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Joseph" }]
+dependencies = [
+    "build123d>=0.10.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+hollow-idol = "hollow_idol.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["hollow_idol*"]
+exclude = ["tests*", "models*", "output*", "docs*"]
