@@ -25,6 +25,22 @@ RAIL_HEIGHT = 4.0
 RAIL_REACH = 2.0
 
 
+def key_positions(cfg: MoldConfig, panel_x: float, panel_y: float) -> list[tuple[float, float]]:
+    """Return XY centres for the supported symmetric key layouts."""
+    edge_x = panel_x / 2 - cfg.key_offset
+    edge_y = panel_y / 2 - cfg.key_offset
+
+    layouts = {
+        1: [(0.0, 0.0)],
+        2: [(-edge_x, 0.0), (edge_x, 0.0)],
+        3: [(-edge_x, 0.0), (0.0, 0.0), (edge_x, 0.0)],
+        4: [(edge_x, edge_y), (edge_x, -edge_y), (-edge_x, edge_y), (-edge_x, -edge_y)],
+        5: [(edge_x, edge_y), (edge_x, -edge_y), (-edge_x, edge_y), (-edge_x, -edge_y), (0.0, 0.0)],
+        6: [(edge_x, edge_y), (edge_x, -edge_y), (-edge_x, edge_y), (-edge_x, -edge_y), (-edge_x, 0.0), (edge_x, 0.0)],
+    }
+    return layouts[cfg.key_count]
+
+
 # ── Wall piece ─────────────────────────────────────────────────────────────────
 
 def build_wall_piece(cfg: MoldConfig) -> Part:
@@ -234,34 +250,23 @@ def build_bottom(cfg: MoldConfig, *, convex_keys: bool, has_notch: bool) -> Part
 
         # ── 3. Registration keys on top face ─────────────────────────────
         top_z = panel_h
-        hemi_x = panel_x / 2 - c.hemi_offset
-        hemi_y = panel_y / 2 - c.hemi_offset
+        positions = [(x, y, 0.0) for x, y in key_positions(c, panel_x, panel_y)]
 
         if convex_keys:
-            hemi_cz = top_z - (c.hemi_r - c.hemi_height)
-            with Locations(
-                ( hemi_x,  hemi_y, hemi_cz),
-                ( hemi_x, -hemi_y, hemi_cz),
-                (-hemi_x,  hemi_y, hemi_cz),
-                (-hemi_x, -hemi_y, hemi_cz),
-            ):
-                Sphere(c.hemi_r)
+            key_cz = top_z - (c.key_radius - c.key_height)
+            with Locations(*[(x, y, key_cz) for x, y, _ in positions]):
+                Sphere(c.key_radius)
             # Clip sphere material below panel floor (z=0)
-            with Locations((0, 0, -c.hemi_r / 2)):
-                Box(panel_x + 2, panel_y + 2, c.hemi_r, mode=Mode.SUBTRACT)
-            # Clip anything above top face level + hemi_height
-            clip_above = top_z + c.hemi_height + 1
+            with Locations((0, 0, -c.key_radius / 2)):
+                Box(panel_x + 2, panel_y + 2, c.key_radius, mode=Mode.SUBTRACT)
+            # Clip anything above top face level + key_height
+            clip_above = top_z + c.key_height + 1
             with Locations((0, 0, clip_above)):
                 Box(panel_x + 2, panel_y + 2, 2, mode=Mode.SUBTRACT)
         else:
-            hemi_cz = top_z + (c.hemi_r - c.hemi_height)
-            with Locations(
-                ( hemi_x,  hemi_y, hemi_cz),
-                ( hemi_x, -hemi_y, hemi_cz),
-                (-hemi_x,  hemi_y, hemi_cz),
-                (-hemi_x, -hemi_y, hemi_cz),
-            ):
-                Sphere(c.hemi_r, mode=Mode.SUBTRACT)
+            key_cz = top_z + (c.key_radius - c.key_height)
+            with Locations(*[(x, y, key_cz) for x, y, _ in positions]):
+                Sphere(c.key_radius, mode=Mode.SUBTRACT)
 
         # ── 4. ID notch on −Y short edge (Half A only) ────────────────────
         if has_notch:

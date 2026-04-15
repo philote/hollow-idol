@@ -15,7 +15,7 @@ import json
 import sys
 
 from hollow_idol.config import MoldConfig
-from hollow_idol.mold_case import PANEL_HEIGHT, build_wall_piece, build_bottom
+from hollow_idol.mold_case import PANEL_HEIGHT, build_wall_piece, build_bottom, key_positions
 
 
 def _bbox_dict(part) -> dict:
@@ -37,8 +37,9 @@ def _expected(cfg: MoldConfig) -> dict:
     """Derived dimension expectations from config math."""
     panel_x = cfg.outer_x - 2 * cfg.wall - cfg.tongue_clearance
     panel_y = cfg.outer_y - 2 * cfg.wall - cfg.tongue_clearance
-    key_x   = (panel_x / 2) - cfg.hemi_offset
-    key_y   = (panel_y / 2) - cfg.hemi_offset
+    positions = key_positions(cfg, panel_x, panel_y)
+    x_margins = [(panel_x / 2) - abs(x) - cfg.key_radius for x, _ in positions]
+    y_margins = [(panel_y / 2) - abs(y) - cfg.key_radius for _, y in positions]
     return {
         "wall_x_expected":   round(cfg.outer_x + 2 * cfg.flange_width, 3),
         "wall_y_expected":   round(cfg.outer_y / 2, 3),
@@ -46,10 +47,11 @@ def _expected(cfg: MoldConfig) -> dict:
         "panel_x_expected":  round(panel_x, 3),
         "panel_y_expected":  round(panel_y, 3),
         "slab_h_expected":   round(PANEL_HEIGHT, 3),
-        "hemi_centre_x":     round(key_x, 3),
-        "hemi_centre_y":     round(key_y, 3),
-        "hemi_fits_x_margin": round(key_x - cfg.hemi_r, 3),
-        "hemi_fits_y_margin": round(key_y - cfg.hemi_r, 3),
+        "key_positions": [
+            {"x": round(x, 3), "y": round(y, 3)} for x, y in positions
+        ],
+        "key_edge_margin_x_min": round(min(x_margins), 3),
+        "key_edge_margin_y_min": round(min(y_margins), 3),
     }
 
 
@@ -66,10 +68,11 @@ def run_report(cfg: MoldConfig, json_only: bool = False) -> dict:
             "outer_y":          cfg.outer_y,
             "outer_z":          cfg.outer_z,
             "wall":             cfg.wall,
+            "key_count":        cfg.key_count,
+            "key_radius":       cfg.key_radius,
+            "key_height":       cfg.key_height,
+            "key_offset":       cfg.key_offset,
             "tongue_clearance": cfg.tongue_clearance,
-            "hemi_r":           cfg.hemi_r,
-            "hemi_height":      cfg.hemi_height,
-            "hemi_offset":      cfg.hemi_offset,
             "flange_width":     cfg.flange_width,
             "flange_thickness": cfg.flange_thickness,
         },
@@ -88,8 +91,8 @@ def run_report(cfg: MoldConfig, json_only: bool = False) -> dict:
         "panel_x_ok":   abs(geo["bottom_convex"]["size_x"] - exp["panel_x_expected"]) < tol,
         "panel_y_ok":   abs(geo["bottom_convex"]["size_y"] - exp["panel_y_expected"]) < tol,
         "panel_z_ok":   geo["bottom_convex"]["size_z"] >= exp["slab_h_expected"] - tol,
-        "hemi_fits_x":  exp["hemi_fits_x_margin"] > 0,
-        "hemi_fits_y":  exp["hemi_fits_y_margin"] > 0,
+        "keys_fit_x":   exp["key_edge_margin_x_min"] > 0,
+        "keys_fit_y":   exp["key_edge_margin_y_min"] > 0,
     }
     report["checks"] = checks
     report["all_checks_pass"] = all(checks.values())
@@ -114,7 +117,7 @@ def _pretty_print(r: dict) -> None:
     print("  MOLD GEOMETRY REPORT")
     print("=" * 60)
     print(f"\nConfig: {cfg['outer_x']} x {cfg['outer_y']} x {cfg['outer_z']} mm  "
-          f"(wall={cfg['wall']}, panel clearance={cfg['tongue_clearance']})")
+          f"(wall={cfg['wall']}, keys={cfg['key_count']}, panel clearance={cfg['tongue_clearance']})")
 
     print("\n-- Wall piece (C-frame) --")
     w = geo["wall_piece"]
@@ -133,8 +136,8 @@ def _pretty_print(r: dict) -> None:
     print(f"  Actual:    X={c['size_x']}  Y={c['size_y']}  Z={c['size_z']}  vol={c['volume_mm3']} mm³")
 
     print("\n-- Registration key fit --")
-    print(f"  Hemi centre X margin from edge: {exp['hemi_fits_x_margin']} mm [{tick(chk['hemi_fits_x'])}]")
-    print(f"  Hemi centre Y margin from edge: {exp['hemi_fits_y_margin']} mm [{tick(chk['hemi_fits_y'])}]")
+    print(f"  Min key X margin from edge: {exp['key_edge_margin_x_min']} mm [{tick(chk['keys_fit_x'])}]")
+    print(f"  Min key Y margin from edge: {exp['key_edge_margin_y_min']} mm [{tick(chk['keys_fit_y'])}]")
 
     status = "ALL PASS" if r["all_checks_pass"] else "FAILURES DETECTED"
     print(f"\n{'=' * 60}")
@@ -151,10 +154,14 @@ def main() -> None:
     parser.add_argument("--outer-y",          type=float, default=80.0)
     parser.add_argument("--outer-z",          type=float, default=40.0)
     parser.add_argument("--wall",             type=float, default=5.0)
+    parser.add_argument("--key-count", choices=range(1, 7), type=int, default=4)
+    parser.add_argument("--key-radius", dest="key_radius", type=float, default=6.0)
+    parser.add_argument("--hemi-r", dest="key_radius", type=float, help=argparse.SUPPRESS)
+    parser.add_argument("--key-height", dest="key_height", type=float, default=3.0)
+    parser.add_argument("--hemi-height", dest="key_height", type=float, help=argparse.SUPPRESS)
+    parser.add_argument("--key-offset", dest="key_offset", type=float, default=15.0)
+    parser.add_argument("--hemi-offset", dest="key_offset", type=float, help=argparse.SUPPRESS)
     parser.add_argument("--tongue-clearance", type=float, default=0.25)
-    parser.add_argument("--hemi-r",           type=float, default=6.0)
-    parser.add_argument("--hemi-height",      type=float, default=3.0)
-    parser.add_argument("--hemi-offset",      type=float, default=15.0)
     parser.add_argument("--flange-width",     type=float, default=10.0)
     parser.add_argument("--flange-thickness", type=float, default=3.0)
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON only")
@@ -165,10 +172,11 @@ def main() -> None:
         outer_y=args.outer_y,
         outer_z=args.outer_z,
         wall=args.wall,
+        key_count=args.key_count,
+        key_radius=args.key_radius,
+        key_height=args.key_height,
+        key_offset=args.key_offset,
         tongue_clearance=args.tongue_clearance,
-        hemi_r=args.hemi_r,
-        hemi_height=args.hemi_height,
-        hemi_offset=args.hemi_offset,
         flange_width=args.flange_width,
         flange_thickness=args.flange_thickness,
     )

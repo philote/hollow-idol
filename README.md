@@ -54,7 +54,7 @@ half_a_wall_left.stl   half_a_wall_right.stl   half_a_bottom.stl
 half_b_wall_left.stl   half_b_wall_right.stl   half_b_bottom.stl
 ```
 
-Half A bottom has convex hemisphere keys and an ID notch. Half B bottom has concave divots.
+Half A bottom has convex registration keys and an ID notch. Half B bottom has concave divots.
 
 ---
 
@@ -79,9 +79,10 @@ and exits non-zero if any check fails.
 | `--outer-z` | 40 mm | Outer tray height |
 | `--wall` | 5 mm | Wall and floor thickness |
 | `--chamfer` | 3 mm | Interior corner chamfer size |
-| `--hemi-r` | 6 mm | Registration key sphere radius |
-| `--hemi-height` | 3 mm | Dome / divot height |
-| `--hemi-offset` | 15 mm | Key centre distance from interior corner |
+| `--key-count` | 4 | Registration key count |
+| `--key-radius` | 6 mm | Registration key radius |
+| `--key-height` | 3 mm | Registration key height |
+| `--key-offset` | 15 mm | Distance from panel edge to outer key centres |
 | `--tongue-clearance` | 0.25 mm | Panel fit clearance |
 | `--flange-width` | 10 mm | Binder clip flange width |
 | `--flange-thickness` | 3 mm | Flange thickness |

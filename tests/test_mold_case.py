@@ -19,6 +19,7 @@ from hollow_idol.mold_case import (
     build_half_a,
     build_half_b,
     generate,
+    key_positions,
 )
 
 TOL = 0.5  # mm tolerance for bounding-box checks
@@ -33,9 +34,10 @@ SMALL_CFG = MoldConfig(
     outer_y=60.0,
     outer_z=30.0,
     wall=4.0,
-    hemi_r=5.0,
-    hemi_height=2.5,
-    hemi_offset=12.0,
+    key_count=6,
+    key_radius=5.0,
+    key_height=2.5,
+    key_offset=12.0,
     flange_width=8.0,
     flange_thickness=2.5,
 )
@@ -45,9 +47,10 @@ LARGE_CFG = MoldConfig(
     outer_y=120.0,
     outer_z=60.0,
     wall=6.0,
-    hemi_r=8.0,
-    hemi_height=4.0,
-    hemi_offset=20.0,
+    key_count=1,
+    key_radius=8.0,
+    key_height=4.0,
+    key_offset=20.0,
     flange_width=12.0,
     flange_thickness=4.0,
 )
@@ -199,7 +202,7 @@ class TestBottomDimensions:
         part = build_bottom(cfg, convex_keys=True, has_notch=True)
         _, _, sz = bbox_size(part)
         slab_h = PANEL_HEIGHT
-        max_z = slab_h + cfg.hemi_height + cfg.notch_h + TOL
+        max_z = slab_h + cfg.key_height + cfg.notch_h + TOL
         assert sz <= max_z, (
             f"panel Z={sz:.3f} exceeds max expected {max_z:.3f}"
         )
@@ -241,15 +244,31 @@ class TestFitInvariants:
         )
 
     @pytest.mark.parametrize("cfg", ALL_CONFIGS)
-    def test_hemi_offset_within_panel(self, cfg):
-        """Key centres must be inside the panel footprint."""
-        panel_half_x = (cfg.outer_x - 2 * cfg.wall - cfg.tongue_clearance) / 2
-        panel_half_y = (cfg.outer_y - 2 * cfg.wall - cfg.tongue_clearance) / 2
-        key_x = panel_half_x - cfg.hemi_offset
-        key_y = panel_half_y - cfg.hemi_offset
-        assert key_x > cfg.hemi_r, (
-            f"hemi centre X={key_x:.3f} too close to panel edge (hemi_r={cfg.hemi_r})"
+    def test_all_key_positions_within_panel(self, cfg):
+        """All key centres must stay inside the panel footprint with radius clearance."""
+        panel_x = cfg.outer_x - 2 * cfg.wall - cfg.tongue_clearance
+        panel_y = cfg.outer_y - 2 * cfg.wall - cfg.tongue_clearance
+        panel_half_x = panel_x / 2
+        panel_half_y = panel_y / 2
+        positions = key_positions(cfg, panel_x, panel_y)
+        assert len(positions) == cfg.key_count
+        for key_x, key_y in positions:
+            assert panel_half_x - abs(key_x) > cfg.key_radius, (
+                f"key X={key_x:.3f} too close to panel edge (key_radius={cfg.key_radius})"
+            )
+            assert panel_half_y - abs(key_y) > cfg.key_radius, (
+                f"key Y={key_y:.3f} too close to panel edge (key_radius={cfg.key_radius})"
+            )
+
+
+class TestKeyLayouts:
+    @pytest.mark.parametrize("key_count", [1, 2, 3, 4, 5, 6])
+    def test_supported_key_counts_build(self, key_count):
+        cfg = MoldConfig(key_count=key_count)
+        positions = key_positions(
+            cfg,
+            cfg.outer_x - 2 * cfg.wall - cfg.tongue_clearance,
+            cfg.outer_y - 2 * cfg.wall - cfg.tongue_clearance,
         )
-        assert key_y > cfg.hemi_r, (
-            f"hemi centre Y={key_y:.3f} too close to panel edge (hemi_r={cfg.hemi_r})"
-        )
+        assert len(positions) == key_count
+        assert is_valid_part(build_bottom(cfg, convex_keys=True, has_notch=False))

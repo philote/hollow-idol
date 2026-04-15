@@ -21,9 +21,13 @@ def main() -> None:
     parser.add_argument("--chamfer",     type=float, default=3.0,   metavar="MM", help="Interior edge chamfer (default 3)")
 
     # Registration keys
-    parser.add_argument("--hemi-r",      type=float, default=6.0,   metavar="MM", help="Key sphere radius (default 6)")
-    parser.add_argument("--hemi-height", type=float, default=3.0,   metavar="MM", help="Dome/divot height (default 3)")
-    parser.add_argument("--hemi-offset", type=float, default=15.0,  metavar="MM", help="Key centre distance from interior corner (default 15)")
+    parser.add_argument("--key-count", choices=range(1, 7), type=int, default=4, metavar="N", help="Registration key count (default 4)")
+    parser.add_argument("--key-radius", dest="key_radius", type=float, default=6.0, metavar="MM", help="Registration key radius (default 6)")
+    parser.add_argument("--hemi-r", dest="key_radius", type=float, help=argparse.SUPPRESS)
+    parser.add_argument("--key-height", dest="key_height", type=float, default=3.0, metavar="MM", help="Registration key height (default 3)")
+    parser.add_argument("--hemi-height", dest="key_height", type=float, help=argparse.SUPPRESS)
+    parser.add_argument("--key-offset", dest="key_offset", type=float, default=15.0, metavar="MM", help="Distance from panel edge to outer key centres (default 15)")
+    parser.add_argument("--hemi-offset", dest="key_offset", type=float, help=argparse.SUPPRESS)
 
     # Sliding panel fit
     parser.add_argument("--tongue-clearance",  type=float, default=0.25, metavar="MM", help="Panel fit clearance (default 0.25)")
@@ -50,9 +54,10 @@ def main() -> None:
         outer_z=args.outer_z,
         wall=args.wall,
         chamfer=args.chamfer,
-        hemi_r=args.hemi_r,
-        hemi_height=args.hemi_height,
-        hemi_offset=args.hemi_offset,
+        key_count=args.key_count,
+        key_radius=args.key_radius,
+        key_height=args.key_height,
+        key_offset=args.key_offset,
         tongue_clearance=args.tongue_clearance,
         flange_width=args.flange_width,
         flange_thickness=args.flange_thickness,
